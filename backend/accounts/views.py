@@ -2,12 +2,13 @@ from rest_framework import generics, status, permissions
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
-from .models import User
+from .models import User, SystemSetting
 from .serializers import (
     UserRegistrationSerializer, UserProfileSerializer,
     UserAdminSerializer, ChangePasswordSerializer
 )
 from audit.services import log_action
+from .permissions import IsAdministrator
 
 
 class RegisterView(generics.CreateAPIView):
@@ -52,15 +53,33 @@ class ChangePasswordView(APIView):
         return Response({'detail': 'Password changed successfully.'})
 
 
+class SystemSettingsView(APIView):
+    """Administrator-only, non-secret configuration endpoint."""
+    permission_classes = [IsAdministrator]
+
+    def get(self, request):
+        return Response({item.key: item.value for item in SystemSetting.objects.all()})
+
+    def put(self, request):
+        allowed = {'application', 'registration', 'notifications', 'content', 'ai'}
+        payload = request.data if isinstance(request.data, dict) else {}
+        for key, value in payload.items():
+            if key not in allowed:
+                continue
+            # Deliberately reject any credential-like fields from this public API surface.
+            if isinstance(value, dict) and any('key' in str(k).lower() or 'secret' in str(k).lower() for k in value):
+                return Response({'detail': 'Secrets cannot be configured through this endpoint.'}, status=status.HTTP_400_BAD_REQUEST)
+            SystemSetting.objects.update_or_create(key=key, defaults={'value': value, 'updated_by': request.user})
+        log_action(request.user, 'SYSTEM_SETTINGS_UPDATE', 'Updated system settings', target_type='SystemSetting')
+        return self.get(request)
+
+
 class UserListView(generics.ListAPIView):
     """Admin: list all users."""
     serializer_class = UserAdminSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAdministrator]
 
     def get_queryset(self):
-        user = self.request.user
-        if not (user.is_admin_role or user.is_superuser):
-            return User.objects.none()
         qs = User.objects.all()
         role = self.request.query_params.get('role')
         if role:
@@ -74,12 +93,9 @@ class UserListView(generics.ListAPIView):
 class UserManageView(generics.RetrieveUpdateAPIView):
     """Admin: manage individual user."""
     serializer_class = UserAdminSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAdministrator]
 
     def get_queryset(self):
-        user = self.request.user
-        if not (user.is_admin_role or user.is_superuser):
-            return User.objects.none()
         return User.objects.all()
 
     def perform_update(self, serializer):

@@ -36,3 +36,14 @@ class User(AbstractUser):
     @property
     def is_admin_role(self):
         return self.role == self.Role.ADMIN
+
+
+class SystemSetting(models.Model):
+    """Non-secret platform configuration. Credentials must never be stored here."""
+    key = models.CharField(max_length=100, unique=True)
+    value = models.JSONField(default=dict)
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(User, null=True, on_delete=models.SET_NULL, related_name='+')
+
+    class Meta:
+        ordering = ['key']

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { authAPI } from '../api/client';
-import { User, Mail, Lock, Save, AlertCircle, CheckCircle } from 'lucide-react';
+import { User, Mail, Lock, Save, AlertCircle, CheckCircle, Camera } from 'lucide-react';
 
 export default function ProfilePage() {
   const { user, updateProfile } = useAuth();
@@ -12,11 +12,21 @@ export default function ProfilePage() {
   const [passForm, setPassForm] = useState({ old_password: '', new_password: '' });
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
+  const [avatarPreview, setAvatarPreview] = useState(user?.avatar || '');
 
   const handleUpdate = async (e) => {
     e.preventDefault();
     try { await updateProfile(form); setMsg('Profile updated!'); setErr(''); }
     catch { setErr('Update failed.'); setMsg(''); }
+  };
+
+  const handleAvatar = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/') || file.size > 5 * 1024 * 1024) { setErr('Choose an image smaller than 5 MB.'); return; }
+    const payload = new FormData(); payload.append('avatar', file);
+    try { const updated = await authAPI.updateProfile(payload); updateProfile(updated.data); setAvatarPreview(URL.createObjectURL(file)); setMsg('Profile image updated.'); setErr(''); }
+    catch { setErr('Profile image upload failed.'); }
   };
 
   const handlePassword = async (e) => {
@@ -34,6 +44,7 @@ export default function ProfilePage() {
 
       <div className="bg-white rounded-xl border border-stone-200 p-6">
         <h3 className="font-semibold text-stone-800 mb-4">Profile Information</h3>
+        <div className="mb-5 flex items-center gap-4"><div className="h-16 w-16 overflow-hidden rounded-full bg-emerald-100"><>{avatarPreview ? <img src={avatarPreview.replace(/^https?:\/\/[^/]+/, '')} alt="Profile" className="h-full w-full object-cover"/> : <User className="m-5 h-6 w-6 text-emerald-700"/>}</></div><label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-emerald-200 px-3 py-2 text-sm font-medium text-emerald-800 hover:bg-emerald-50"><Camera className="h-4 w-4"/> Update photo<input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleAvatar}/></label></div>
         <form onSubmit={handleUpdate} className="space-y-4">
           <div className="grid sm:grid-cols-2 gap-4">
             <div>

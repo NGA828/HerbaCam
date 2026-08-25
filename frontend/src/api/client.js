@@ -50,7 +50,7 @@ export const authAPI = {
   register: (data) => api.post('/auth/register/', data),
   refreshToken: (refresh) => api.post('/auth/token/refresh/', { refresh }),
   getProfile: () => api.get('/auth/profile/'),
-  updateProfile: (data) => api.patch('/auth/profile/', data),
+  updateProfile: (data) => api.patch('/auth/profile/', data, data instanceof FormData ? { headers: { 'Content-Type': 'multipart/form-data' } } : undefined),
   changePassword: (data) => api.post('/auth/change-password/', data),
 };
 
@@ -117,6 +117,8 @@ export const geographyAPI = {
   regionDetail: (id) => api.get(`/geography/regions/${id}/`),
   divisions: (params) => api.get('/geography/divisions/', { params }),
   communities: (params) => api.get('/geography/communities/', { params }),
+  createRegion: (data) => api.post('/geography/regions/?detailed=1', data),
+  updateRegion: (id, data) => api.patch(`/geography/regions/${id}/`, data),
 };
 
 // Articles API
@@ -145,6 +147,7 @@ export const notificationsAPI = {
   unreadCount: () => api.get('/notifications/unread-count/'),
   markRead: (id) => api.post(`/notifications/${id}/read/`),
   markAllRead: () => api.post('/notifications/mark-all-read/'),
+  delete: (id) => api.delete(`/notifications/${id}/`),
 };
 
 // Preservation API
