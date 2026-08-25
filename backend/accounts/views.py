@@ -8,6 +8,7 @@ from .serializers import (
     UserAdminSerializer, ChangePasswordSerializer
 )
 from audit.services import log_action
+from .permissions import IsAdministrator
 
 
 class RegisterView(generics.CreateAPIView):
@@ -55,12 +56,9 @@ class ChangePasswordView(APIView):
 class UserListView(generics.ListAPIView):
     """Admin: list all users."""
     serializer_class = UserAdminSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAdministrator]
 
     def get_queryset(self):
-        user = self.request.user
-        if not (user.is_admin_role or user.is_superuser):
-            return User.objects.none()
         qs = User.objects.all()
         role = self.request.query_params.get('role')
         if role:
@@ -74,12 +72,9 @@ class UserListView(generics.ListAPIView):
 class UserManageView(generics.RetrieveUpdateAPIView):
     """Admin: manage individual user."""
     serializer_class = UserAdminSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAdministrator]
 
     def get_queryset(self):
-        user = self.request.user
-        if not (user.is_admin_role or user.is_superuser):
-            return User.objects.none()
         return User.objects.all()
 
     def perform_update(self, serializer):

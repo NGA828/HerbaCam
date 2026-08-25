@@ -10,14 +10,15 @@ import {
 
 const navItems = {
   USER: [
-    { path: '/dashboard', label: 'Dashboard', icon: Home },
-    { path: '/identify', label: 'Identify Plant', icon: Camera },
-    { path: '/symptoms', label: 'Symptom Search', icon: Search },
-    { path: '/plants', label: 'Plants', icon: Leaf },
-    { path: '/favorites', label: 'Favorites', icon: Heart },
-    { path: '/history', label: 'History', icon: Clock },
-    { path: '/map', label: 'Map', icon: Map },
+    { path: '/user/dashboard', label: 'Dashboard', icon: Home },
+    { path: '/user/identify', label: 'Identify Plant', icon: Camera },
+    { path: '/user/symptoms', label: 'Symptom Search', icon: Search },
+    { path: '/plants', label: 'Browse Plants', icon: Leaf },
+    { path: '/user/favorites', label: 'Favorites', icon: Heart },
+    { path: '/user/history', label: 'History', icon: Clock },
     { path: '/articles', label: 'Articles', icon: BookOpen },
+    { path: '/user/notifications', label: 'Notifications', icon: Bell },
+    { path: '/user/profile', label: 'Profile', icon: User },
   ],
   PRACTITIONER: [
     { path: '/practitioner/dashboard', label: 'Dashboard', icon: Home },

@@ -98,14 +98,23 @@ class KnowledgeSubmissionDetailView(generics.RetrieveUpdateAPIView):
         return KnowledgeSubmission.objects.filter(contributor=user)
 
     def perform_update(self, serializer):
+        current = serializer.instance
+        user = self.request.user
+        # Published knowledge is immutable for contributors. Corrections must go through
+        # a fresh verification workflow rather than silently altering public knowledge.
+        if current.status in [KnowledgeSubmission.Status.APPROVED, KnowledgeSubmission.Status.PUBLISHED] and not (user.is_admin_role or user.is_superuser):
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied('Verified submissions cannot be edited. Submit a new correction for review.')
         submission = serializer.save()
-        # If resubmitting after rejection
-        if submission.status == KnowledgeSubmission.Status.REJECTED:
+        # A contributor editing a rejected record explicitly resubmits it for expert review.
+        if submission.status == KnowledgeSubmission.Status.REJECTED and user == submission.contributor:
             submission.status = KnowledgeSubmission.Status.SUBMITTED
             submission.submitted_at = timezone.now()
             submission.reviewer = None
             submission.review_comments = ''
+            submission.review_reason = ''
             submission.save()
+        log_action(user, 'KNOWLEDGE_UPDATE', f'Updated knowledge submission #{submission.pk}', target_type='KnowledgeSubmission', target_id=submission.pk)
 
 
 class PendingReviewListView(generics.ListAPIView):

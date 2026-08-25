@@ -28,6 +28,7 @@ import PractitionerDashboard from './pages/PractitionerDashboard';
 import KnowledgeSubmissionForm from './pages/KnowledgeSubmissionForm';
 import ExpertDashboard from './pages/ExpertDashboard';
 import AdminDashboard from './pages/AdminDashboard';
+import { NotificationsPage, ContributionsPage, SubmissionDetailPage, ReviewsPage, RecordManager, AdminUsersPage, PreservationPage } from './pages/AuthenticatedPages';
 
 function ProtectedRoute({ children, roles }) {
   const { user, loading } = useAuth();
@@ -58,17 +59,30 @@ function AppRoutes() {
       {/* Dashboard routes (all authenticated) */}
       <Route element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
         <Route path="/dashboard" element={<UserDashboard />} />
+        <Route path="/user/dashboard" element={<UserDashboard />} />
         <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/user/profile" element={<ProfilePage />} />
         <Route path="/favorites" element={<FavoritesPage />} />
+        <Route path="/user/favorites" element={<FavoritesPage />} />
         <Route path="/history" element={<HistoryPage />} />
+        <Route path="/user/history" element={<HistoryPage />} />
+        <Route path="/user/identify" element={<IdentifyPage />} />
+        <Route path="/user/identify/:id" element={<IdentifyPage />} />
+        <Route path="/user/symptoms" element={<SymptomsPage />} />
+        <Route path="/user/plants/:id" element={<PlantDetailPage />} />
+        <Route path="/user/notifications" element={<NotificationsPage />} />
 
         {/* Practitioner routes */}
         <Route path="/practitioner/dashboard" element={
           <ProtectedRoute roles={['PRACTITIONER', 'ADMIN']}><PractitionerDashboard /></ProtectedRoute>
         } />
         <Route path="/practitioner/contributions" element={
-          <ProtectedRoute roles={['PRACTITIONER', 'ADMIN']}><PractitionerDashboard /></ProtectedRoute>
+          <ProtectedRoute roles={['PRACTITIONER', 'ADMIN']}><ContributionsPage /></ProtectedRoute>
         } />
+        <Route path="/practitioner/contributions/:id" element={
+          <ProtectedRoute roles={['PRACTITIONER', 'ADMIN']}><SubmissionDetailPage /></ProtectedRoute>
+        } />
+        <Route path="/practitioner/profile" element={<ProtectedRoute roles={['PRACTITIONER', 'ADMIN']}><ProfilePage /></ProtectedRoute>} />
         <Route path="/practitioner/contributions/new" element={
           <ProtectedRoute roles={['PRACTITIONER', 'ADMIN']}><KnowledgeSubmissionForm /></ProtectedRoute>
         } />
@@ -77,26 +91,21 @@ function AppRoutes() {
         <Route path="/expert/dashboard" element={
           <ProtectedRoute roles={['EXPERT', 'ADMIN']}><ExpertDashboard /></ProtectedRoute>
         } />
-        <Route path="/expert/reviews" element={
-          <ProtectedRoute roles={['EXPERT', 'ADMIN']}><ExpertDashboard /></ProtectedRoute>
-        } />
-        <Route path="/expert/evidence" element={
-          <ProtectedRoute roles={['EXPERT', 'ADMIN']}><ExpertDashboard /></ProtectedRoute>
-        } />
-        <Route path="/expert/safety" element={
-          <ProtectedRoute roles={['EXPERT', 'ADMIN']}><ExpertDashboard /></ProtectedRoute>
-        } />
-        <Route path="/expert/preservation" element={
-          <ProtectedRoute roles={['EXPERT', 'ADMIN']}><ExpertDashboard /></ProtectedRoute>
-        } />
+        <Route path="/expert/reviews" element={<ProtectedRoute roles={['EXPERT', 'ADMIN']}><ReviewsPage /></ProtectedRoute>} />
+        <Route path="/expert/reviews/:id" element={<ProtectedRoute roles={['EXPERT', 'ADMIN']}><SubmissionDetailPage review /></ProtectedRoute>} />
+        <Route path="/expert/evidence" element={<ProtectedRoute roles={['EXPERT', 'ADMIN']}><RecordManager kind="evidence" /></ProtectedRoute>} />
+        <Route path="/expert/evidence/new" element={<ProtectedRoute roles={['EXPERT', 'ADMIN']}><RecordManager kind="evidence" /></ProtectedRoute>} />
+        <Route path="/expert/evidence/:id/edit" element={<ProtectedRoute roles={['EXPERT', 'ADMIN']}><RecordManager kind="evidence" /></ProtectedRoute>} />
+        <Route path="/expert/safety" element={<ProtectedRoute roles={['EXPERT', 'ADMIN']}><RecordManager kind="safety" /></ProtectedRoute>} />
+        <Route path="/expert/preservation" element={<ProtectedRoute roles={['EXPERT', 'ADMIN']}><PreservationPage /></ProtectedRoute>} />
+        <Route path="/expert/notifications" element={<ProtectedRoute roles={['EXPERT', 'ADMIN']}><NotificationsPage /></ProtectedRoute>} />
 
         {/* Admin routes */}
         <Route path="/admin/dashboard" element={
           <ProtectedRoute roles={['ADMIN']}><AdminDashboard /></ProtectedRoute>
         } />
-        <Route path="/admin/users" element={
-          <ProtectedRoute roles={['ADMIN']}><AdminDashboard /></ProtectedRoute>
-        } />
+        <Route path="/admin/users" element={<ProtectedRoute roles={['ADMIN']}><AdminUsersPage /></ProtectedRoute>} />
+        <Route path="/admin/users/:id" element={<ProtectedRoute roles={['ADMIN']}><AdminUsersPage /></ProtectedRoute>} />
         <Route path="/admin/plants" element={
           <ProtectedRoute roles={['ADMIN']}><AdminDashboard /></ProtectedRoute>
         } />
@@ -109,24 +118,18 @@ function AppRoutes() {
         <Route path="/admin/articles" element={
           <ProtectedRoute roles={['ADMIN']}><AdminDashboard /></ProtectedRoute>
         } />
-        <Route path="/admin/evidence" element={
-          <ProtectedRoute roles={['ADMIN']}><AdminDashboard /></ProtectedRoute>
-        } />
-        <Route path="/admin/safety" element={
-          <ProtectedRoute roles={['ADMIN']}><AdminDashboard /></ProtectedRoute>
-        } />
+        <Route path="/admin/evidence" element={<ProtectedRoute roles={['ADMIN']}><RecordManager kind="evidence" /></ProtectedRoute>} />
+        <Route path="/admin/safety" element={<ProtectedRoute roles={['ADMIN']}><RecordManager kind="safety" /></ProtectedRoute>} />
         <Route path="/admin/geography" element={
           <ProtectedRoute roles={['ADMIN']}><AdminDashboard /></ProtectedRoute>
         } />
-        <Route path="/admin/preservation" element={
-          <ProtectedRoute roles={['ADMIN']}><AdminDashboard /></ProtectedRoute>
-        } />
+        <Route path="/admin/preservation" element={<ProtectedRoute roles={['ADMIN']}><PreservationPage /></ProtectedRoute>} />
         <Route path="/admin/analytics" element={
           <ProtectedRoute roles={['ADMIN']}><AdminDashboard /></ProtectedRoute>
         } />
-        <Route path="/admin/audit" element={
-          <ProtectedRoute roles={['ADMIN']}><AdminDashboard /></ProtectedRoute>
-        } />
+        <Route path="/admin/audit" element={<ProtectedRoute roles={['ADMIN']}><AdminDashboard /></ProtectedRoute>} />
+        <Route path="/admin/audit-logs" element={<ProtectedRoute roles={['ADMIN']}><AdminDashboard /></ProtectedRoute>} />
+        <Route path="/admin/settings" element={<ProtectedRoute roles={['ADMIN']}><AdminDashboard /></ProtectedRoute>} />
       </Route>
 
       {/* Catch-all */}

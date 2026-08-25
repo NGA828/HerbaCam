@@ -34,6 +34,17 @@ class MarkNotificationReadView(APIView):
             return Response({'error': 'Not found'}, status=status.HTTP_404_NOT_FOUND)
 
 
+class DeleteNotificationView(APIView):
+    """Delete only the requesting user's own notification."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def delete(self, request, pk):
+        deleted, _ = Notification.objects.filter(pk=pk, user=request.user).delete()
+        if not deleted:
+            return Response({'error': 'Not found'}, status=status.HTTP_404_NOT_FOUND)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
 class MarkAllReadView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
