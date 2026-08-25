@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { identificationAPI } from '../api/client';
 import { Camera, Trash2, Leaf } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { plantImage } from '../utils/images';
 
 export default function HistoryPage() {
   const [history, setHistory] = useState([]);
@@ -41,7 +42,7 @@ export default function HistoryPage() {
           {history.map(item => (
             <div key={item.id} className="bg-white rounded-xl border border-stone-200 p-4 flex items-center gap-4">
               <div className="w-16 h-16 bg-stone-100 rounded-lg overflow-hidden shrink-0">
-                {item.image && <img src={`${item.image.replace(/^https?:\/\/[^/]+/, '')}`} alt="" className="w-full h-full object-cover" />}
+                {item.image && <img src={plantImage(item.image)} alt="" className="w-full h-full object-cover transition-transform hover:scale-110" />}
               </div>
               <div className="flex-1 min-w-0">
                 <p className="font-medium text-stone-800">
