@@ -38,9 +38,12 @@ Django is the central controller. The AI never directly accesses the database. T
 cd backend
 pip install -r requirements.txt
 python manage.py migrate
-python manage.py seed_data   # Load demo data
+python manage.py seed_data   # Load demo data + copy plant images into backend/media/
 python manage.py runserver 0.0.0.0:8000
 ```
+
+`backend/media/` is not tracked by git. `seed_data` populates it from the demo images in
+`frontend/src/assets/plants/`, so run it after cloning or plant images will 404.
 
 ### Frontend
 ```bash
