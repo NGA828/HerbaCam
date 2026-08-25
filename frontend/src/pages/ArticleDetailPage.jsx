@@ -24,7 +24,7 @@ export default function ArticleDetailPage() {
         <article className="bg-white rounded-2xl border border-stone-200 overflow-hidden">
           {article.cover_image && (
             <div className="aspect-[21/9] bg-stone-100">
-              <img src={`http://localhost:8000${article.cover_image}`} alt="" className="w-full h-full object-cover" />
+              <img src={`${article.cover_image.replace(/^https?:\/\/[^/]+/, '')}`} alt="" className="w-full h-full object-cover" />
             </div>
           )}
           <div className="p-6 sm:p-8">

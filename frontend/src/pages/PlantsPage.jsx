@@ -77,7 +77,7 @@ export default function PlantsPage() {
                 className="group bg-white rounded-2xl border border-stone-200 overflow-hidden hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
                 <div className="aspect-[4/3] bg-gradient-to-br from-green-50 to-emerald-50 flex items-center justify-center">
                   {plant.image ? (
-                    <img src={`http://localhost:8000${plant.image}`} alt={plant.common_name} className="w-full h-full object-cover" />
+                    <img src={plant.image.replace(/^https?:\/\/[^/]+/, '')} alt={plant.common_name} className="w-full h-full object-cover" />
                   ) : (
                     <Leaf className="w-16 h-16 text-green-200 group-hover:text-green-300 transition-colors" />
                   )}

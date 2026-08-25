@@ -21,6 +21,7 @@ export default function Navbar() {
     { path: '/plants', label: 'Plants' },
     { path: '/symptoms', label: 'Symptoms' },
     { path: '/identify', label: 'Identify' },
+    { path: '/map', label: 'Map' },
     { path: '/articles', label: 'Articles' },
     { path: '/about', label: 'About' },
   ];

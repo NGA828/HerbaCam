@@ -81,7 +81,7 @@ export default function SymptomsPage() {
                     <div className="flex items-start gap-4">
                       <div className="w-16 h-16 bg-green-50 rounded-xl flex items-center justify-center shrink-0">
                         {item.plant.image ? (
-                          <img src={`http://localhost:8000${item.plant.image}`} alt="" className="w-full h-full object-cover rounded-xl" />
+                          <img src={`${item.plant.image.replace(/^https?:\/\/[^/]+/, '')}`} alt="" className="w-full h-full object-cover rounded-xl" />
                         ) : (
                           <Leaf className="w-8 h-8 text-green-300" />
                         )}

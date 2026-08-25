@@ -41,7 +41,7 @@ export default function HistoryPage() {
           {history.map(item => (
             <div key={item.id} className="bg-white rounded-xl border border-stone-200 p-4 flex items-center gap-4">
               <div className="w-16 h-16 bg-stone-100 rounded-lg overflow-hidden shrink-0">
-                {item.image && <img src={`http://localhost:8000${item.image}`} alt="" className="w-full h-full object-cover" />}
+                {item.image && <img src={`${item.image.replace(/^https?:\/\/[^/]+/, '')}`} alt="" className="w-full h-full object-cover" />}
               </div>
               <div className="flex-1 min-w-0">
                 <p className="font-medium text-stone-800">

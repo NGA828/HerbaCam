@@ -34,7 +34,7 @@ export default function ArticlesPage() {
                 <div className="flex flex-col sm:flex-row">
                   <div className="sm:w-48 aspect-[16/9] sm:aspect-auto bg-gradient-to-br from-green-100 to-emerald-100 flex items-center justify-center shrink-0">
                     {article.cover_image ? (
-                      <img src={`http://localhost:8000${article.cover_image}`} alt="" className="w-full h-full object-cover" />
+                      <img src={`${article.cover_image.replace(/^https?:\/\/[^/]+/, '')}`} alt="" className="w-full h-full object-cover" />
                     ) : (
                       <BookOpen className="w-12 h-12 text-green-300" />
                     )}

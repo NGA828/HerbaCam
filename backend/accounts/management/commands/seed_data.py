@@ -2,8 +2,11 @@
 Seed database with demo data for HerbaCam development.
 All data is clearly labeled as demo/sample data.
 """
+import os
 from django.core.management.base import BaseCommand
+from django.core.files.base import ContentFile
 from django.utils import timezone
+from django.conf import settings
 from accounts.models import User
 from geography.models import Region, Division, Community
 from plants.models import Plant, PlantLocalName, PlantPart
@@ -13,6 +16,17 @@ from evidence.models import Evidence
 from safety.models import SafetyInformation
 from articles.models import Article, ArticleCategory
 from practitioners.models import PractitionerProfile
+
+
+def set_plant_image(plant, image_filename):
+    """Assign a pre-generated image to a plant record."""
+    media_plants_dir = os.path.join(settings.MEDIA_ROOT, 'plants')
+    image_path = os.path.join(media_plants_dir, image_filename)
+    if os.path.exists(image_path):
+        with open(image_path, 'rb') as f:
+            plant.image.save(f'plants/{image_filename}', ContentFile(f.read()), save=True)
+        return True
+    return False
 
 
 class Command(BaseCommand):
@@ -184,6 +198,17 @@ class Command(BaseCommand):
         ]
 
         plants = {}
+        plant_image_map = {
+            'Azadirachta indica': 'neem.jpg',
+            'Moringa oleifera': 'moringa.jpg',
+            'Prunus africana': 'prunus-africana.jpg',
+            'Vernonia amygdalina': 'bitter-leaf.jpg',
+            'Cola acuminata': 'kola-nut.jpg',
+            'Alstonia boonei': 'alstonia.jpg',
+            'Ocimum gratissimum': 'african-basil.jpg',
+            'Rauvolfia vomitoria': 'rauvolfia.jpg',
+        }
+        
         for pdata in plants_data:
             plant, created = Plant.objects.get_or_create(
                 scientific_name=pdata['scientific_name'],
@@ -195,6 +220,13 @@ class Command(BaseCommand):
                     'habitat': pdata['habitat'],
                 }
             )
+            
+            # Assign image if not already set
+            if not plant.image:
+                image_file = plant_image_map.get(pdata['scientific_name'])
+                if image_file:
+                    set_plant_image(plant, image_file)
+            
             if created:
                 for name, lang, region_name in pdata['local_names']:
                     region = regions.get(region_name)

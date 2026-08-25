@@ -69,9 +69,9 @@ export default function PlantDetailPage() {
 
         {/* Hero */}
         <div className="bg-white rounded-2xl border border-stone-200 overflow-hidden mb-8">
-          <div className="aspect-[16/9] sm:aspect-[21/9] bg-gradient-to-br from-green-100 to-emerald-100 flex items-center justify-center relative">
+          <div className="aspect-[16/9] sm:aspect-[21/9] bg-gradient-to-br from-green-100 to-emerald-100 flex items-center justify-center relative overflow-hidden">
             {plant.image ? (
-              <img src={`http://localhost:8000${plant.image}`} alt={plant.common_name} className="w-full h-full object-cover" />
+              <img src={`${plant.image.replace(/^https?:\/\/[^/]+/, '')}`} alt={plant.common_name} className="w-full h-full object-cover" />
             ) : (
               <Leaf className="w-24 h-24 text-green-300" />
             )}

@@ -17,6 +17,7 @@ import IdentifyPage from './pages/IdentifyPage';
 import ArticlesPage from './pages/ArticlesPage';
 import ArticleDetailPage from './pages/ArticleDetailPage';
 import AboutPage from './pages/AboutPage';
+import MapPage from './pages/MapPage';
 
 // Dashboard pages
 import UserDashboard from './pages/UserDashboard';
@@ -51,6 +52,7 @@ function AppRoutes() {
         <Route path="/articles" element={<ArticlesPage />} />
         <Route path="/articles/:slug" element={<ArticleDetailPage />} />
         <Route path="/about" element={<AboutPage />} />
+        <Route path="/map" element={<MapPage />} />
       </Route>
 
       {/* Dashboard routes (all authenticated) */}
