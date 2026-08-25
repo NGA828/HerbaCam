@@ -20,7 +20,19 @@ const generated = {
 /** Resolve API media through the same-origin proxy, with generated botanical art as a useful fallback. */
 export function plantImage(plant) {
   const image = typeof plant === 'string' ? plant : plant?.image;
-  if (image) return image.replace(/^https?:\/\/[^/]+/, '');
+  if (image) {
+    // If it's already a relative media path, return it directly
+    if (image.startsWith('/media/')) return image;
+    
+    // Strip absolute domains (e.g., http://localhost:8000/media/...)
+    // so Vite's proxy can handle the request properly.
+    try {
+      const url = new URL(image);
+      return url.pathname;
+    } catch {
+      return image.replace(/^https?:\/\/[^/]+/, '');
+    }
+  }
   const key = `${plant?.scientific_name || ''} ${plant?.common_name || ''}`.toLowerCase();
   return Object.entries(generated).find(([name]) => key.includes(name))?.[1] || africanBasil;
 }

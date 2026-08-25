@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { analyticsAPI, identificationAPI } from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
-import { Leaf, Camera, Heart, Clock, ArrowRight, TrendingUp, BarChart3 } from 'lucide-react';
-import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from 'recharts';
+import { Leaf, Camera, Heart, Clock, ArrowRight, TrendingUp, BarChart3, Search } from 'lucide-react';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
+import { plantImage } from '../utils/images';
 
 const COLORS = ['#16a34a', '#059669', '#0d9488', '#0891b2', '#2563eb', '#7c3aed'];
 
@@ -22,6 +23,21 @@ export default function UserDashboard() {
     { name: 'Traditional Uses', value: stats.total_traditional_uses || 0 },
     { name: 'Identifications', value: stats.total_identifications || 0 },
   ].filter(d => d.value > 0) : [];
+
+  if (!stats) {
+    return (
+      <div className="space-y-6">
+        <div className="h-48 bg-stone-100 rounded-2xl animate-pulse" />
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[1,2,3,4].map(i => <div key={i} className="h-28 bg-stone-100 rounded-xl animate-pulse" />)}
+        </div>
+        <div className="grid lg:grid-cols-3 gap-6">
+          <div className="h-72 bg-stone-100 rounded-xl animate-pulse" />
+          <div className="lg:col-span-2 h-72 bg-stone-100 rounded-xl animate-pulse" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -113,8 +129,8 @@ export default function UserDashboard() {
             <div className="space-y-3">
               {recentIds.map(id => (
                 <div key={id.id} className="flex items-center gap-3 p-3 rounded-lg hover:bg-stone-50 transition-colors">
-                  <div className="w-12 h-12 bg-stone-100 rounded-lg overflow-hidden shrink-0">
-                    {id.image && <img src={`${id.image.replace(/^https?:\/\/[^/]+/, '')}`} alt="" className="w-full h-full object-cover" />}
+                  <div className="w-14 h-14 bg-stone-100 rounded-xl overflow-hidden shrink-0 shadow-sm border border-stone-200">
+                    <img src={plantImage(id.image)} alt="Identification" className="w-full h-full object-cover transition-transform hover:scale-110" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-sm text-stone-800 truncate">
