@@ -30,6 +30,7 @@ class ArticleListView(generics.ListAPIView):
 class ArticleDetailView(generics.RetrieveAPIView):
     serializer_class = ArticleDetailSerializer
     permission_classes = [permissions.AllowAny]
+    lookup_field = 'slug'
 
     def get_queryset(self):
         user = self.request.user

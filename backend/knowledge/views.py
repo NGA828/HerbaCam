@@ -31,13 +31,35 @@ class KnowledgeSubmissionCreateView(generics.CreateAPIView):
     permission_classes = [IsPractitioner]
 
     def perform_create(self, serializer):
-        submission = serializer.save(contributor=self.request.user)
-        if submission.status != KnowledgeSubmission.Status.DRAFT:
-            submission.status = KnowledgeSubmission.Status.SUBMITTED
-            submission.submitted_at = timezone.now()
-            submission.save()
+        # Check if user explicitly wants to save as draft
+        is_draft = self.request.data.get('status') == 'DRAFT'
+        
+        if is_draft:
+            submission = serializer.save(
+                contributor=self.request.user,
+                status=KnowledgeSubmission.Status.DRAFT
+            )
+        else:
+            # Default: auto-submit for review
+            submission = serializer.save(
+                contributor=self.request.user,
+                status=KnowledgeSubmission.Status.SUBMITTED,
+                submitted_at=timezone.now()
+            )
+            # Notify experts of new submission
+            from accounts.models import User
+            experts = User.objects.filter(role__in=[User.Role.EXPERT, User.Role.ADMIN])
+            for expert in experts:
+                send_notification(
+                    expert, 'NEW_REVIEW',
+                    'New Knowledge Submission',
+                    f'A new knowledge submission #{submission.pk} is awaiting review.',
+                    related_object_type='KnowledgeSubmission',
+                    related_object_id=submission.pk,
+                )
+        
         log_action(self.request.user, 'KNOWLEDGE_SUBMIT',
-                   f'Submitted knowledge: #{submission.pk}',
+                   f'{"Saved draft" if is_draft else "Submitted"} knowledge: #{submission.pk}',
                    target_type='KnowledgeSubmission', target_id=submission.pk)
 
 
