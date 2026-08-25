@@ -7,7 +7,9 @@ media/
 staticfiles/
 
 # Environment
+.env
 backend/.env
+frontend/.env
 
 # Node
 node_modules/
