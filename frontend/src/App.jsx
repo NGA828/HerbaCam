@@ -30,6 +30,7 @@ import ExpertDashboard from './pages/ExpertDashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import { NotificationsPage, ContributionsPage, SubmissionDetailPage, ReviewsPage, RecordManager, AdminUsersPage, PreservationPage } from './pages/AuthenticatedPages';
 import { PlantsManagement, KnowledgeManagement, ArticlesManagement, AuditLogs, SettingsPage, GeographyManagement } from './pages/AdminWorkspaces';
+import ExpertAnalyticsPage from './pages/ExpertAnalyticsPage';
 
 function ProtectedRoute({ children, roles }) {
   const { user, loading } = useAuth();
@@ -99,7 +100,10 @@ function AppRoutes() {
         <Route path="/expert/evidence/:id/edit" element={<ProtectedRoute roles={['EXPERT', 'ADMIN']}><RecordManager kind="evidence" /></ProtectedRoute>} />
         <Route path="/expert/safety" element={<ProtectedRoute roles={['EXPERT', 'ADMIN']}><RecordManager kind="safety" /></ProtectedRoute>} />
         <Route path="/expert/preservation" element={<ProtectedRoute roles={['EXPERT', 'ADMIN']}><PreservationPage /></ProtectedRoute>} />
+        <Route path="/expert/analytics" element={<ProtectedRoute roles={['EXPERT', 'ADMIN']}><ExpertAnalyticsPage /></ProtectedRoute>} />
+        <Route path="/expert/knowledge" element={<ProtectedRoute roles={['EXPERT', 'ADMIN']}><KnowledgeManagement /></ProtectedRoute>} />
         <Route path="/expert/notifications" element={<ProtectedRoute roles={['EXPERT', 'ADMIN']}><NotificationsPage /></ProtectedRoute>} />
+        <Route path="/expert/profile" element={<ProtectedRoute roles={['EXPERT', 'ADMIN']}><ProfilePage /></ProtectedRoute>} />
 
         {/* Admin routes */}
         <Route path="/admin/dashboard" element={
