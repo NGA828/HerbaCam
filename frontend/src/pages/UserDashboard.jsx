@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { analyticsAPI, identificationAPI } from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
-import { Leaf, Camera, Heart, Clock, ArrowRight, TrendingUp, BarChart3, Search } from 'lucide-react';
+import { Leaf, Camera, Heart, ArrowRight, TrendingUp, BarChart3 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { plantImage } from '../utils/images';
 
