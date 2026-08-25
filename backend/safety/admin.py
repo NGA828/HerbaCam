@@ -1,3 +1,6 @@
 from django.contrib import admin
-
-# Register your models here.
+from .models import SafetyInformation
+@admin.register(SafetyInformation)
+class SafetyAdmin(admin.ModelAdmin):
+    list_display = ['plant', 'risk_level', 'is_verified', 'reviewer']
+    list_filter = ['risk_level', 'is_verified']
