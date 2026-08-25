@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { plantsAPI, knowledgeAPI, evidenceAPI, safetyAPI, analyticsAPI } from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
-import { plantImage } from '../utils/images';
-import { Leaf, Heart, MapPin, AlertTriangle, Shield, BookOpen, ArrowLeft, CheckCircle, ExternalLink } from 'lucide-react';
+import { plantImage, withImageFallback } from '../utils/images';
+import { Heart, MapPin, AlertTriangle, Shield, BookOpen, ArrowLeft, CheckCircle } from 'lucide-react';
 
 export default function PlantDetailPage() {
   const { id } = useParams();
@@ -71,11 +71,12 @@ export default function PlantDetailPage() {
         {/* Hero */}
         <div className="bg-white rounded-2xl border border-stone-200 overflow-hidden mb-8">
           <div className="aspect-[16/9] sm:aspect-[21/9] bg-gradient-to-br from-green-100 to-emerald-100 flex items-center justify-center relative overflow-hidden">
-            {plantImage(plant) ? (
-              <img src={plantImage(plant)} alt={plant.common_name} className="w-full h-full object-cover" />
-            ) : (
-              <Leaf className="w-24 h-24 text-green-300" />
-            )}
+            <img
+              src={plantImage(plant)}
+              alt={plant.common_name || plant.scientific_name}
+              className="w-full h-full object-cover"
+              onError={withImageFallback(plant)}
+            />
             {user && (
               <button onClick={toggleFavorite}
                 className={`absolute top-4 right-4 p-3 rounded-full bg-white/90 backdrop-blur-sm shadow-md transition-all ${isFavorite ? 'text-red-500' : 'text-stone-400 hover:text-red-400'}`}>

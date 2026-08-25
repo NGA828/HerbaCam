@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { articlesAPI } from '../api/client';
 import { ArrowLeft, Calendar, User } from 'lucide-react';
+import { articleImage } from '../utils/images';
 
 export default function ArticleDetailPage() {
   const { slug } = useParams();
@@ -24,7 +25,7 @@ export default function ArticleDetailPage() {
         <article className="bg-white rounded-2xl border border-stone-200 overflow-hidden">
           {article.cover_image && (
             <div className="aspect-[21/9] bg-stone-100">
-              <img src={`${article.cover_image.replace(/^https?:\/\/[^/]+/, '')}`} alt="" className="w-full h-full object-cover" />
+              <img src={articleImage(article)} alt="" className="w-full h-full object-cover" onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.style.opacity = '0'; }} />
             </div>
           )}
           <div className="p-6 sm:p-8">

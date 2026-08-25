@@ -1,7 +1,7 @@
 from django.utils import timezone
 from rest_framework import generics, permissions
 from .models import Article, ArticleCategory
-from .serializers import ArticleListSerializer, ArticleDetailSerializer, ArticleCategorySerializer
+from .serializers import ArticleListSerializer, ArticleDetailSerializer, ArticleCategorySerializer, ArticleAdminSerializer
 
 
 class IsAdminOrReadOnly(permissions.BasePermission):
@@ -41,7 +41,7 @@ class ArticleDetailView(generics.RetrieveAPIView):
 
 
 class ArticleAdminListView(generics.ListCreateAPIView):
-    serializer_class = ArticleDetailSerializer
+    serializer_class = ArticleAdminSerializer
     permission_classes = [IsAdminOrReadOnly]
     queryset = Article.objects.all()
 
@@ -50,7 +50,7 @@ class ArticleAdminListView(generics.ListCreateAPIView):
 
 
 class ArticleAdminDetailView(generics.RetrieveUpdateDestroyAPIView):
-    serializer_class = ArticleDetailSerializer
+    serializer_class = ArticleAdminSerializer
     permission_classes = [IsAdminOrReadOnly]
     queryset = Article.objects.all()
 

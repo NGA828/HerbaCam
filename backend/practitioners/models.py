@@ -19,5 +19,8 @@ class PractitionerProfile(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    class Meta:
+        ordering = ['created_at']
+
     def __str__(self):
         return f"Practitioner: {self.user.get_full_name() or self.user.username}"

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useLocation, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useNotifications } from '../contexts/NotificationContext';
@@ -108,6 +108,16 @@ export default function DashboardLayout() {
   const role = user?.role || 'USER';
   const items = navItems[role] || navItems.USER;
 
+  const pageTitle = useMemo(() => {
+    const all = [...navItems.USER, ...navItems.PRACTITIONER, ...navItems.EXPERT, ...navItems.ADMIN];
+    const exact = all.find(i => i.path === location.pathname);
+    if (exact) return exact.label;
+    if (location.pathname.startsWith('/expert/reviews')) return 'Pending Reviews';
+    if (location.pathname.startsWith('/practitioner/contributions')) return 'My Contributions';
+    if (location.pathname.startsWith('/admin')) return 'Administration';
+    return 'Dashboard';
+  }, [location.pathname]);
+
   const handleLogout = () => {
     logout();
     navigate('/');
@@ -170,7 +180,7 @@ export default function DashboardLayout() {
               <Menu className="w-5 h-5" />
             </button>
             <h1 className="text-lg font-semibold text-stone-800 hidden lg:block">
-              {items.find(i => i.path === location.pathname)?.label || 'Dashboard'}
+              {pageTitle}
             </h1>
           </div>
 

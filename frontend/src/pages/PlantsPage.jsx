@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { plantsAPI, geographyAPI } from '../api/client';
-import { Leaf, Search, MapPin, Filter, X } from 'lucide-react';
-import { plantImage } from '../utils/images';
+import { Leaf, Search, X } from 'lucide-react';
+import { plantImage, withImageFallback } from '../utils/images';
 
 export default function PlantsPage() {
   const [plants, setPlants] = useState([]);
@@ -16,7 +16,6 @@ export default function PlantsPage() {
   }, []);
 
   useEffect(() => {
-    setLoading(true);
     const params = {};
     if (search) params.search = search;
     if (selectedRegion) params.region = selectedRegion;
@@ -36,16 +35,16 @@ export default function PlantsPage() {
         <div className="flex flex-col sm:flex-row gap-4 mb-8">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-stone-400" />
-            <input type="text" placeholder="Search by name..." value={search} onChange={e => setSearch(e.target.value)}
+            <input type="text" placeholder="Search by name..." value={search} onChange={e => { setLoading(true); setSearch(e.target.value); }}
               className="w-full pl-10 pr-4 py-3 bg-white border border-stone-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none" />
           </div>
-          <select value={selectedRegion} onChange={e => setSelectedRegion(e.target.value)}
+          <select value={selectedRegion} onChange={e => { setLoading(true); setSelectedRegion(e.target.value); }}
             className="px-4 py-3 bg-white border border-stone-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none min-w-[180px]">
             <option value="">All Regions</option>
             {regions.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
           </select>
           {(search || selectedRegion) && (
-            <button onClick={() => { setSearch(''); setSelectedRegion(''); }}
+            <button onClick={() => { setLoading(true); setSearch(''); setSelectedRegion(''); }}
               className="flex items-center gap-2 px-4 py-3 text-stone-600 hover:text-red-600 transition-colors">
               <X className="w-4 h-4" /> Clear
             </button>
@@ -77,11 +76,13 @@ export default function PlantsPage() {
               <Link key={plant.id} to={`/plants/${plant.id}`}
                 className="group bg-white rounded-2xl border border-stone-200 overflow-hidden hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
                 <div className="aspect-[4/3] bg-gradient-to-br from-green-50 to-emerald-50 flex items-center justify-center">
-                  {plantImage(plant) ? (
-                    <img src={plantImage(plant)} alt={plant.common_name} className="w-full h-full object-cover" />
-                  ) : (
-                    <Leaf className="w-16 h-16 text-green-200 group-hover:text-green-300 transition-colors" />
-                  )}
+                  <img
+                    src={plantImage(plant)}
+                    alt={plant.common_name || plant.scientific_name}
+                    className="w-full h-full object-cover"
+                    loading="lazy"
+                    onError={withImageFallback(plant)}
+                  />
                 </div>
                 <div className="p-4">
                   <h3 className="font-semibold text-stone-800 group-hover:text-green-700 transition-colors">

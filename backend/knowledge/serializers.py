@@ -28,19 +28,32 @@ class TraditionalUseSerializer(serializers.ModelSerializer):
 class KnowledgeSubmissionSerializer(serializers.ModelSerializer):
     contributor_name = serializers.CharField(source='contributor.get_full_name', read_only=True)
     reviewer_name = serializers.CharField(source='reviewer.get_full_name', read_only=True, default='')
+    plant_name = serializers.SerializerMethodField()
+    region_name = serializers.CharField(source='region.name', read_only=True, default='')
+    symptom_name = serializers.CharField(source='symptom.name', read_only=True, default='')
+    preparation_method_name = serializers.SerializerMethodField()
 
     class Meta:
         model = KnowledgeSubmission
         fields = ['id', 'contributor', 'contributor_name', 'status',
-                  'plant', 'proposed_scientific_name', 'proposed_common_name',
-                  'local_name', 'language', 'symptom', 'proposed_symptom_name',
-                  'plant_part', 'preparation_method', 'traditional_use_description',
-                  'cultural_context', 'region', 'community', 'community_name',
+                  'plant', 'plant_name', 'proposed_scientific_name', 'proposed_common_name',
+                  'local_name', 'language', 'symptom', 'symptom_name', 'proposed_symptom_name',
+                  'plant_part', 'preparation_method', 'preparation_method_name',
+                  'traditional_use_description',
+                  'cultural_context', 'region', 'region_name', 'community', 'community_name',
                   'supporting_information',
                   'reviewer', 'reviewer_name', 'review_comments', 'review_reason', 'review_date',
                   'submitted_at', 'created_at', 'updated_at']
         read_only_fields = ['contributor', 'status', 'reviewer', 'review_comments',
                            'review_reason', 'review_date', 'submitted_at']
+
+    def get_plant_name(self, obj):
+        if obj.plant:
+            return obj.plant.scientific_name
+        return obj.proposed_scientific_name or ''
+
+    def get_preparation_method_name(self, obj):
+        return obj.preparation_method or ''
 
 
 class KnowledgeReviewSerializer(serializers.Serializer):
