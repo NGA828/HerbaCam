@@ -2,7 +2,7 @@ from rest_framework import generics, status, permissions
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
-from .models import User
+from .models import User, SystemSetting
 from .serializers import (
     UserRegistrationSerializer, UserProfileSerializer,
     UserAdminSerializer, ChangePasswordSerializer
@@ -51,6 +51,27 @@ class ChangePasswordView(APIView):
         request.user.save()
         log_action(request.user, 'PASSWORD_CHANGE', 'User changed password')
         return Response({'detail': 'Password changed successfully.'})
+
+
+class SystemSettingsView(APIView):
+    """Administrator-only, non-secret configuration endpoint."""
+    permission_classes = [IsAdministrator]
+
+    def get(self, request):
+        return Response({item.key: item.value for item in SystemSetting.objects.all()})
+
+    def put(self, request):
+        allowed = {'application', 'registration', 'notifications', 'content', 'ai'}
+        payload = request.data if isinstance(request.data, dict) else {}
+        for key, value in payload.items():
+            if key not in allowed:
+                continue
+            # Deliberately reject any credential-like fields from this public API surface.
+            if isinstance(value, dict) and any('key' in str(k).lower() or 'secret' in str(k).lower() for k in value):
+                return Response({'detail': 'Secrets cannot be configured through this endpoint.'}, status=status.HTTP_400_BAD_REQUEST)
+            SystemSetting.objects.update_or_create(key=key, defaults={'value': value, 'updated_by': request.user})
+        log_action(request.user, 'SYSTEM_SETTINGS_UPDATE', 'Updated system settings', target_type='SystemSetting')
+        return self.get(request)
 
 
 class UserListView(generics.ListAPIView):

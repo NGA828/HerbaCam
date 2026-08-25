@@ -117,6 +117,8 @@ export const geographyAPI = {
   regionDetail: (id) => api.get(`/geography/regions/${id}/`),
   divisions: (params) => api.get('/geography/divisions/', { params }),
   communities: (params) => api.get('/geography/communities/', { params }),
+  createRegion: (data) => api.post('/geography/regions/?detailed=1', data),
+  updateRegion: (id, data) => api.patch(`/geography/regions/${id}/`, data),
 };
 
 // Articles API
