@@ -7,7 +7,11 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 5173,
-    allowedHosts: 'all',
+    hmr: {
+      host: 'localhost',
+    },
+    cors: true,
+    allowedHosts: ['.e2b.app'],
     proxy: {
       '/api': {
         target: 'http://localhost:8000',
