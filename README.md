@@ -27,8 +27,8 @@ Django is the central controller. The AI never directly accesses the database. T
 ## Tech Stack
 
 - **Frontend**: React 19, Vite, Tailwind CSS v4, React Router, Axios, Recharts, Leaflet, Lucide React
-- **Backend**: Python, Django 5, Django REST Framework, SimpleJWT, django-cors-headers
-- **Database**: MySQL (default for this project) / SQLite (fallback for local dev when no MySQL is configured)
+- **Backend**: Python, Django 4.2 LTS, Django REST Framework, SimpleJWT, django-cors-headers
+- **Database**: MySQL 5.7+ / MariaDB 10.4+ (default for this project) / SQLite (fallback for local dev when no MySQL is configured)
 - **AI**: OpenRouter API with vision-capable models
 
 ## Quick Start
@@ -54,6 +54,9 @@ python manage.py runserver 0.0.0.0:8000
 
 > Note: `mysqlclient` is the recommended production driver, but the included `PyMySQL` fallback
 > lets the backend connect to MySQL on Windows/common dev machines without build tools.
+
+> Note: the project targets Django 4.2 LTS so it runs against MariaDB 10.4 (as shipped with
+> XAMPP/WAMP). Django 5 requires MariaDB 10.11+ or MySQL 8.0.11+.
 
 ### Frontend
 ```bash
