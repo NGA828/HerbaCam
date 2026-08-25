@@ -18,15 +18,31 @@ from articles.models import Article, ArticleCategory
 from practitioners.models import PractitionerProfile
 
 
+SEED_IMAGE_DIRS = [
+    os.path.join(settings.MEDIA_ROOT, 'plants'),
+    os.path.join(settings.BASE_DIR.parent, 'frontend', 'src', 'assets', 'plants'),
+]
+
+
 def set_plant_image(plant, image_filename):
     """Assign a pre-generated image to a plant record."""
-    media_plants_dir = os.path.join(settings.MEDIA_ROOT, 'plants')
-    image_path = os.path.join(media_plants_dir, image_filename)
-    if os.path.exists(image_path):
-        with open(image_path, 'rb') as f:
-            plant.image.save(f'plants/{image_filename}', ContentFile(f.read()), save=True)
-        return True
+    for source_dir in SEED_IMAGE_DIRS:
+        image_path = os.path.join(source_dir, image_filename)
+        if os.path.exists(image_path):
+            with open(image_path, 'rb') as f:
+                plant.image.save(image_filename, ContentFile(f.read()), save=True)
+            return True
     return False
+
+
+def plant_image_missing(plant):
+    """True when the plant has no image or its file is absent from storage."""
+    if not plant.image:
+        return True
+    try:
+        return not plant.image.storage.exists(plant.image.name)
+    except (NotImplementedError, ValueError):
+        return False
 
 
 class Command(BaseCommand):
@@ -221,8 +237,8 @@ class Command(BaseCommand):
                 }
             )
             
-            # Assign image if not already set
-            if not plant.image:
+            # Assign image if not already set, or if the stored file is missing
+            if plant_image_missing(plant):
                 image_file = plant_image_map.get(pdata['scientific_name'])
                 if image_file:
                     set_plant_image(plant, image_file)
