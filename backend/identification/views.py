@@ -69,23 +69,25 @@ class PlantIdentifyView(APIView):
         # Store results
         data = ai_result['data']
         db_match = ai_result.get('database_match', {})
+        mode = ai_result.get('mode', 'live')
+        demo_notice = ai_result.get('demo_notice', '')
 
         # Primary identification
         plant_obj = None
-        if db_match.get('found') and db_match.get('id'):
+        if db_match and db_match.get('found') and db_match.get('id'):
             try:
                 plant_obj = Plant.objects.get(id=db_match['id'])
             except Plant.DoesNotExist:
                 pass
 
-        IdentificationResult.objects.create(
+        primary_result = IdentificationResult.objects.create(
             identification=identification,
             plant=plant_obj,
             scientific_name=data['identification']['scientific_name'],
             common_name=data['identification'].get('common_name', ''),
             confidence=data['identification']['confidence'],
             is_primary=True,
-            ai_raw_response=data,
+            ai_raw_response={**data, 'mode': mode, 'demo_notice': demo_notice},
         )
 
         # Alternative identifications
@@ -110,6 +112,14 @@ class PlantIdentifyView(APIView):
         identification.status = Identification.Status.COMPLETED
         identification.save()
 
+        # Build response with metadata
+        response_data = IdentificationSerializer(identification).data
+        response_data['mode'] = mode
+        if demo_notice:
+            response_data['demo_notice'] = demo_notice
+        if db_match and not db_match.get('found'):
+            response_data['database_notice'] = db_match.get('message', '')
+
         # Notify user
         send_notification(
             request.user,
@@ -121,10 +131,10 @@ class PlantIdentifyView(APIView):
         )
 
         log_action(request.user, 'PLANT_IDENTIFICATION',
-                   f'Identified plant: {data["identification"]["scientific_name"]}',
+                   f'Identified plant: {data["identification"]["scientific_name"]} ({mode} mode)',
                    target_type='Identification', target_id=identification.id)
 
-        return Response(IdentificationSerializer(identification).data, status=status.HTTP_201_CREATED)
+        return Response(response_data, status=status.HTTP_201_CREATED)
 
 
 class IdentificationHistoryView(generics.ListAPIView):

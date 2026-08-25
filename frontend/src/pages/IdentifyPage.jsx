@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { identificationAPI } from '../api/client';
 import { Link } from 'react-router-dom';
-import { Camera, Upload, X, AlertCircle, Leaf, CheckCircle, AlertTriangle, ArrowRight, Image } from 'lucide-react';
+import { Camera, Upload, X, AlertCircle, Leaf, AlertTriangle, ArrowRight, Image, Info, Brain, FlaskConical } from 'lucide-react';
 
 export default function IdentifyPage() {
   const { user } = useAuth();
@@ -50,17 +50,17 @@ export default function IdentifyPage() {
       const res = await identificationAPI.identify(formData);
       setResult(res.data);
     } catch (err) {
-      setError(err.response?.data?.error || 'Identification failed. Please try again.');
+      setError(err.response?.data?.error || err.response?.data?.detail || 'Identification failed. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
   const getConfidenceColor = (conf) => {
-    if (conf >= 0.8) return 'text-green-600 bg-green-50';
-    if (conf >= 0.5) return 'text-amber-600 bg-amber-50';
-    if (conf >= 0.3) return 'text-orange-600 bg-orange-50';
-    return 'text-red-600 bg-red-50';
+    if (conf >= 0.8) return 'text-green-700 bg-green-50 ring-green-200';
+    if (conf >= 0.5) return 'text-amber-700 bg-amber-50 ring-amber-200';
+    if (conf >= 0.3) return 'text-orange-700 bg-orange-50 ring-orange-200';
+    return 'text-red-700 bg-red-50 ring-red-200';
   };
 
   const getConfidenceLabel = (conf) => {
@@ -70,12 +70,23 @@ export default function IdentifyPage() {
     return 'Uncertain';
   };
 
+  const getConfidenceBarColor = (conf) => {
+    if (conf >= 0.8) return 'bg-green-500';
+    if (conf >= 0.5) return 'bg-amber-500';
+    if (conf >= 0.3) return 'bg-orange-500';
+    return 'bg-red-500';
+  };
+
+  const isDemo = result?.mode === 'demo';
+
   return (
     <div className="pt-20 pb-12 min-h-screen">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-stone-800 mb-2">Identify a Plant</h1>
-          <p className="text-stone-500">Upload a photo and our AI will help identify the plant species</p>
+          <h1 className="text-3xl font-bold text-stone-800 mb-2 flex items-center gap-3">
+            <Brain className="w-8 h-8 text-green-600" /> Identify a Plant
+          </h1>
+          <p className="text-stone-500">Upload a photo and our AI will analyze and identify the plant species</p>
         </div>
 
         {!user && (
@@ -109,7 +120,7 @@ export default function IdentifyPage() {
                   </div>
                   <p className="font-medium text-stone-700 mb-2">Drop your plant image here</p>
                   <p className="text-sm text-stone-500 mb-4">or click to browse</p>
-                  <label className="inline-flex items-center gap-2 px-6 py-3 bg-green-700 text-white rounded-xl cursor-pointer hover:bg-green-800 transition-colors">
+                  <label className="inline-flex items-center gap-2 px-6 py-3 bg-green-700 text-white rounded-xl cursor-pointer hover:bg-green-800 transition-colors shadow-sm">
                     <Upload className="w-4 h-4" /> Choose Image
                     <input type="file" accept="image/jpeg,image/png,image/webp" onChange={handleFileChange} className="hidden" />
                   </label>
@@ -124,58 +135,140 @@ export default function IdentifyPage() {
                 {loading ? (
                   <>
                     <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    Analyzing...
+                    Analyzing with AI...
                   </>
                 ) : (
                   <>
-                    <Camera className="w-5 h-5" /> Identify Plant
+                    <Brain className="w-5 h-5" /> Identify Plant
                   </>
                 )}
               </button>
             )}
 
             {error && (
-              <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2 text-sm text-red-700">
-                <AlertCircle className="w-4 h-4 shrink-0" /> {error}
+              <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3 text-sm text-red-700">
+                <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-medium">Identification Error</p>
+                  <p className="mt-1">{error}</p>
+                </div>
               </div>
             )}
+
+            {/* How it works */}
+            <div className="mt-6 bg-white rounded-xl border border-stone-200 p-5">
+              <h3 className="font-semibold text-stone-800 text-sm mb-3 flex items-center gap-2">
+                <Info className="w-4 h-4 text-blue-500" /> How It Works
+              </h3>
+              <div className="space-y-2 text-sm text-stone-600">
+                <div className="flex items-start gap-2">
+                  <span className="w-5 h-5 bg-green-100 rounded-full flex items-center justify-center text-green-700 text-xs font-bold shrink-0">1</span>
+                  <span>Upload a clear photo of the plant (leaf, flower, fruit, or whole plant)</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="w-5 h-5 bg-green-100 rounded-full flex items-center justify-center text-green-700 text-xs font-bold shrink-0">2</span>
+                  <span>Our AI analyzes the image using vision models trained on botanical data</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="w-5 h-5 bg-green-100 rounded-full flex items-center justify-center text-green-700 text-xs font-bold shrink-0">3</span>
+                  <span>Django matches the identification against our Cameroonian plant database</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="w-5 h-5 bg-green-100 rounded-full flex items-center justify-center text-green-700 text-xs font-bold shrink-0">4</span>
+                  <span>You receive the identification with confidence score and traditional knowledge</span>
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Result */}
           <div>
-            {result && !error ? (
+            {result && result.results ? (
               <div className="space-y-4">
-                {result.results?.map((r, i) => (
-                  <div key={r.id || i} className={`bg-white rounded-2xl p-6 border ${i === 0 ? 'border-green-200 shadow-md' : 'border-stone-200'}`}>
-                    {i === 0 && <p className="text-xs text-green-600 font-medium mb-3 uppercase tracking-wider">Primary Identification</p>}
-                    {i > 0 && <p className="text-xs text-stone-400 font-medium mb-3 uppercase tracking-wider">Alternative</p>}
+                {/* Mode indicator */}
+                <div className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium ${
+                  isDemo ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-green-50 text-green-700 border border-green-200'
+                }`}>
+                  {isDemo ? (
+                    <>
+                      <FlaskConical className="w-4 h-4" />
+                      <span>Demo Mode — Using simulated AI identification</span>
+                    </>
+                  ) : (
+                    <>
+                      <Brain className="w-4 h-4" />
+                      <span>Live AI Analysis — Powered by OpenRouter</span>
+                    </>
+                  )}
+                </div>
+
+                {/* Demo notice */}
+                {result.demo_notice && (
+                  <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800">
+                    <p className="font-medium mb-1">⚗️ Demo Mode Notice</p>
+                    <p>{result.demo_notice}</p>
+                    <p className="mt-2 text-xs text-amber-600">
+                      To enable live AI: Set <code className="bg-amber-100 px-1 rounded">OPENROUTER_API_KEY</code> in your <code className="bg-amber-100 px-1 rounded">.env</code> file.
+                    </p>
+                  </div>
+                )}
+
+                {/* Database not found notice */}
+                {result.database_notice && (
+                  <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl text-sm text-blue-800">
+                    <p className="font-medium mb-1">📚 Knowledge Unavailable</p>
+                    <p>{result.database_notice}</p>
+                  </div>
+                )}
+
+                {/* Identification results */}
+                {result.results.map((r, i) => (
+                  <div key={r.id || i} className={`bg-white rounded-2xl p-6 border transition-all ${i === 0 ? 'border-green-200 shadow-md ring-1 ring-green-100' : 'border-stone-200'}`}>
+                    {i === 0 && (
+                      <p className="text-xs text-green-600 font-semibold mb-3 uppercase tracking-wider flex items-center gap-1.5">
+                        <Brain className="w-3.5 h-3.5" /> Primary Identification
+                      </p>
+                    )}
+                    {i > 0 && <p className="text-xs text-stone-400 font-medium mb-3 uppercase tracking-wider">Alternative #{i}</p>}
+                    
                     <h3 className="text-xl font-bold text-stone-800 italic">{r.scientific_name}</h3>
-                    {r.common_name && <p className="text-stone-600">{r.common_name}</p>}
+                    {r.common_name && <p className="text-stone-600 mt-0.5">{r.common_name}</p>}
+                    
                     <div className="flex items-center gap-3 mt-3">
-                      <span className={`px-3 py-1.5 rounded-lg text-sm font-medium ${getConfidenceColor(r.confidence)}`}>
-                        {getConfidenceLabel(r.confidence)} ({(r.confidence * 100).toFixed(0)}%)
+                      <span className={`px-3 py-1.5 rounded-lg text-sm font-medium ring-1 ${getConfidenceColor(r.confidence)}`}>
+                        {getConfidenceLabel(r.confidence)} — {(r.confidence * 100).toFixed(0)}%
                       </span>
                     </div>
-                    <div className="mt-3 h-2 bg-stone-100 rounded-full overflow-hidden">
-                      <div className="h-full bg-green-500 rounded-full transition-all duration-1000" style={{ width: `${r.confidence * 100}%` }} />
+                    
+                    <div className="mt-3">
+                      <div className="h-2.5 bg-stone-100 rounded-full overflow-hidden">
+                        <div className={`h-full rounded-full transition-all duration-1000 ease-out ${getConfidenceBarColor(r.confidence)}`}
+                          style={{ width: `${r.confidence * 100}%` }} />
+                      </div>
                     </div>
+                    
                     {i === 0 && r.plant && (
-                      <Link to={`/plants/${r.plant}`} className="inline-flex items-center gap-2 mt-4 text-green-700 font-medium hover:text-green-800">
+                      <Link to={`/plants/${r.plant}`} className="inline-flex items-center gap-2 mt-4 px-4 py-2 bg-green-50 text-green-700 rounded-lg font-medium hover:bg-green-100 transition-colors text-sm">
                         View Plant Details <ArrowRight className="w-4 h-4" />
                       </Link>
                     )}
+                    
+                    {i === 0 && !r.plant && (
+                      <p className="mt-4 text-sm text-stone-500 italic">
+                        This plant is not yet in our Cameroon-specific database.
+                      </p>
+                    )}
                   </div>
                 ))}
-                {result.error && (
-                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
-                    <AlertTriangle className="w-4 h-4 inline mr-2" />
-                    {result.error}
-                  </div>
-                )}
-                <div className="bg-stone-100 rounded-xl p-4">
-                  <p className="text-xs text-stone-500 italic">
-                    <strong>Note:</strong> AI identification is probabilistic and should not be considered absolute certainty.
-                    Always verify with a botanical expert for critical decisions.
+
+                {/* Disclaimer */}
+                <div className="bg-stone-50 rounded-xl p-4 border border-stone-200">
+                  <p className="text-xs text-stone-500 flex items-start gap-2">
+                    <AlertTriangle className="w-4 h-4 shrink-0 text-amber-500 mt-0.5" />
+                    <span>
+                      <strong>Disclaimer:</strong> AI identification is probabilistic and should not be considered absolute certainty.
+                      Always verify with a botanical expert for critical decisions. This is not medical advice.
+                    </span>
                   </p>
                 </div>
               </div>
@@ -183,9 +276,15 @@ export default function IdentifyPage() {
               <div className="bg-white rounded-2xl border border-stone-200 p-8 text-center">
                 <Image className="w-16 h-16 text-stone-300 mx-auto mb-4" />
                 <h3 className="font-medium text-stone-600 mb-2">Upload an image to get started</h3>
-                <p className="text-sm text-stone-400">
+                <p className="text-sm text-stone-400 mb-4">
                   Take a clear photo of a leaf, flower, fruit, or the whole plant for best results.
                 </p>
+                <div className="flex items-center justify-center gap-4 text-xs text-stone-400">
+                  <span className="flex items-center gap-1"><Leaf className="w-3 h-3" /> Leaves</span>
+                  <span className="flex items-center gap-1">🌸 Flowers</span>
+                  <span className="flex items-center gap-1">🍎 Fruits</span>
+                  <span className="flex items-center gap-1">🌿 Whole plant</span>
+                </div>
               </div>
             )}
           </div>
