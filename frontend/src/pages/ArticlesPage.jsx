@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { articlesAPI } from '../api/client';
 import { BookOpen, Calendar, ArrowRight } from 'lucide-react';
+import { articleImage } from '../utils/images';
 
 export default function ArticlesPage() {
   const [articles, setArticles] = useState([]);
@@ -34,10 +35,15 @@ export default function ArticlesPage() {
                 <div className="flex flex-col sm:flex-row">
                   <div className="sm:w-48 aspect-[16/9] sm:aspect-auto bg-gradient-to-br from-green-100 to-emerald-100 flex items-center justify-center shrink-0">
                     {article.cover_image ? (
-                      <img src={`${article.cover_image.replace(/^https?:\/\/[^/]+/, '')}`} alt="" className="w-full h-full object-cover" />
-                    ) : (
-                      <BookOpen className="w-12 h-12 text-green-300" />
-                    )}
+                      <img
+                        src={articleImage(article)}
+                        alt=""
+                        className="w-full h-full object-cover"
+                        loading="lazy"
+                        onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.style.display = 'none'; const sib = e.currentTarget.nextElementSibling; if (sib) sib.style.display = ''; }}
+                      />
+                    ) : null}
+                    <BookOpen className={`w-12 h-12 text-green-300 ${article.cover_image ? 'hidden' : ''}`} />
                   </div>
                   <div className="p-6 flex-1">
                     <span className="text-xs font-medium text-green-600 uppercase tracking-wider">{article.category_name || 'Article'}</span>

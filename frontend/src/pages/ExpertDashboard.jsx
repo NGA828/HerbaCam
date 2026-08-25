@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { knowledgeAPI } from '../api/client';
-import { Link } from 'react-router-dom';
 import { ClipboardCheck, CheckCircle, XCircle, MessageSquare } from 'lucide-react';
 
 export default function ExpertDashboard() {
@@ -17,7 +16,7 @@ export default function ExpertDashboard() {
     try {
       await knowledgeAPI.review(id, { action, reason, comments: '' });
       setPending(prev => prev.filter(p => p.id !== id));
-    } catch (err) {
+    } catch {
       alert('Review failed. Please try again.');
     }
   };
@@ -67,7 +66,7 @@ export default function ExpertDashboard() {
                 </div>
 
                 <div className="grid sm:grid-cols-2 gap-3 text-sm mb-4">
-                  <div><span className="text-stone-500">Plant:</span> <span className="font-medium">{sub.proposed_scientific_name || sub.plant || 'N/A'}</span></div>
+                  <div><span className="text-stone-500">Plant:</span> <span className="font-medium">{sub.plant_name || sub.proposed_scientific_name || 'N/A'}</span></div>
                   <div><span className="text-stone-500">Local Name:</span> <span className="font-medium">{sub.local_name || 'N/A'}</span></div>
                   <div><span className="text-stone-500">Symptom:</span> <span className="font-medium">{sub.proposed_symptom_name || sub.symptom || 'N/A'}</span></div>
                   <div><span className="text-stone-500">Region:</span> <span className="font-medium">{sub.region || 'N/A'}</span></div>
