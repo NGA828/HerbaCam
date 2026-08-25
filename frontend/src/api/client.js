@@ -50,7 +50,7 @@ export const authAPI = {
   register: (data) => api.post('/auth/register/', data),
   refreshToken: (refresh) => api.post('/auth/token/refresh/', { refresh }),
   getProfile: () => api.get('/auth/profile/'),
-  updateProfile: (data) => api.patch('/auth/profile/', data),
+  updateProfile: (data) => api.patch('/auth/profile/', data, data instanceof FormData ? { headers: { 'Content-Type': 'multipart/form-data' } } : undefined),
   changePassword: (data) => api.post('/auth/change-password/', data),
 };
 
