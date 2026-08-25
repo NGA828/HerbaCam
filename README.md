@@ -28,12 +28,19 @@ Django is the central controller. The AI never directly accesses the database. T
 
 - **Frontend**: React 19, Vite, Tailwind CSS v4, React Router, Axios, Recharts, Leaflet, Lucide React
 - **Backend**: Python, Django 5, Django REST Framework, SimpleJWT, django-cors-headers
-- **Database**: SQLite (dev) / MySQL (production ready)
+- **Database**: MySQL (default for this project) / SQLite (fallback for local dev when no MySQL is configured)
 - **AI**: OpenRouter API with vision-capable models
 
 ## Quick Start
 
 ### Backend
+
+1. Copy `.env.example` to `.env` and fill in your MySQL credentials:
+```bash
+cp .env.example .env
+```
+
+2. Install dependencies and run the database:
 ```bash
 cd backend
 pip install -r requirements.txt
@@ -44,6 +51,9 @@ python manage.py runserver 0.0.0.0:8000
 
 `backend/media/` is not tracked by git. `seed_data` populates it from the demo images in
 `frontend/src/assets/plants/`, so run it after cloning or plant images will 404.
+
+> Note: `mysqlclient` is the recommended production driver, but the included `PyMySQL` fallback
+> lets the backend connect to MySQL on Windows/common dev machines without build tools.
 
 ### Frontend
 ```bash
@@ -69,12 +79,13 @@ Visit http://localhost:5173
 ```
 SECRET_KEY=your-secret-key
 DEBUG=True
-DB_ENGINE=sqlite3    # or 'mysql'
+DB_ENGINE=mysql
 DB_NAME=herbacam
 DB_USER=root
-DB_PASSWORD=password
+DB_PASSWORD=your-mysql-password
 DB_HOST=127.0.0.1
 DB_PORT=3306
+# DATABASE_URL=mysql://root:your-mysql-password@127.0.0.1:3306/herbacam
 OPENROUTER_API_KEY=your-openrouter-key
 OPENROUTER_MODEL=google/gemini-2.0-flash-exp:free
 ```

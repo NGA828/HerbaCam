@@ -2,11 +2,25 @@
 Django settings for HerbaCam project.
 """
 import os
+import re
+import urllib.parse
 from pathlib import Path
 from datetime import timedelta
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# Allow MySQL to work via the pure-Python PyMySQL driver if mysqlclient is not installed.
+# mysqlclient is the preferred driver in production; PyMySQL is a fallback for Windows/common dev machines.
+if os.getenv('DB_ENGINE', '').lower() == 'mysql' or os.getenv('DB_HOST') or os.getenv('DATABASE_URL'):
+    try:
+        import MySQLdb  # noqa: F401
+    except ImportError:
+        try:
+            import pymysql
+            pymysql.install_as_MySQLdb()
+        except ImportError:
+            pass
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -74,9 +88,30 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'config.wsgi.application'
 
-# Database - use MySQL if configured, otherwise SQLite for development
-db_engine = os.getenv('DB_ENGINE', 'sqlite3')
-if db_engine == 'mysql':
+# Database
+def _database_url_config(url):
+    """Parse a DATABASE_URL into Django's DATABASES format."""
+    parsed = urllib.parse.urlparse(url)
+    path = parsed.path or ''
+    name = Path(path).name
+    config = {
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': name,
+        'USER': parsed.username,
+        'PASSWORD': parsed.password or '',
+        'HOST': parsed.hostname or '127.0.0.1',
+        'PORT': str(parsed.port) if parsed.port else '3306',
+        'OPTIONS': {'charset': 'utf8mb4'},
+    }
+    return config
+
+
+database_url = os.getenv('DATABASE_URL', '')
+if database_url:
+    # e.g. mysql://user:pass@host:3306/dbname or mysql+pymysql://...
+    clean_url = re.sub(r'^mysql\+pymysql://', 'mysql://', database_url)
+    DATABASES = {'default': _database_url_config(clean_url)}
+elif os.getenv('DB_ENGINE', '').lower() == 'mysql' or os.getenv('DB_HOST'):
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.mysql',
@@ -91,6 +126,7 @@ if db_engine == 'mysql':
         }
     }
 else:
+    # Fallback for local development when no MySQL is configured.
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
