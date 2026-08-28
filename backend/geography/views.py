@@ -21,6 +21,9 @@ class RegionListView(generics.ListCreateAPIView):
 
 
 class RegionDetailView(generics.RetrieveUpdateDestroyAPIView):
+
+    # The client edits with PATCH; PUT (full replacement) is not offered.
+    http_method_names = ['get', 'head', 'options', 'patch', 'delete']
     queryset = Region.objects.all()
     serializer_class = RegionSerializer
     permission_classes = [IsAdminOrReadOnly]

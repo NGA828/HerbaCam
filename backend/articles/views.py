@@ -1,5 +1,6 @@
 from django.utils import timezone
 from rest_framework import generics, permissions
+from accounts.permissions import IsStaffOrReadOnly
 from .models import Article, ArticleCategory
 from .serializers import ArticleListSerializer, ArticleDetailSerializer, ArticleCategorySerializer, ArticleAdminSerializer
 
@@ -42,7 +43,7 @@ class ArticleDetailView(generics.RetrieveAPIView):
 
 class ArticleAdminListView(generics.ListCreateAPIView):
     serializer_class = ArticleAdminSerializer
-    permission_classes = [IsAdminOrReadOnly]
+    permission_classes = [IsStaffOrReadOnly]
     queryset = Article.objects.all()
 
     def perform_create(self, serializer):
@@ -50,8 +51,11 @@ class ArticleAdminListView(generics.ListCreateAPIView):
 
 
 class ArticleAdminDetailView(generics.RetrieveUpdateDestroyAPIView):
+
+    # The client edits with PATCH; PUT (full replacement) is not offered.
+    http_method_names = ['get', 'head', 'options', 'patch', 'delete']
     serializer_class = ArticleAdminSerializer
-    permission_classes = [IsAdminOrReadOnly]
+    permission_classes = [IsStaffOrReadOnly]
     queryset = Article.objects.all()
 
     def perform_update(self, serializer):

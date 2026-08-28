@@ -1,6 +1,9 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { NotificationProvider } from './contexts/NotificationContext';
+import { ToastProvider } from './contexts/ToastContext';
+import { ConfirmProvider } from './components/ui/ConfirmDialog';
+import ToastViewport from './components/ui/Toast';
 
 // Layouts
 import PublicLayout from './layouts/PublicLayout';
@@ -32,12 +35,21 @@ import { NotificationsPage, ContributionsPage, SubmissionDetailPage, ReviewsPage
 import {
   PlantsManagement, KnowledgeManagement, ArticlesManagement, AuditLogs,
   SettingsPage, GeographyManagement, PractitionersAdmin, AdminAnalytics,
+  SymptomsManagement,
 } from './pages/AdminWorkspaces';
 import ExpertAnalyticsPage from './pages/ExpertAnalyticsPage';
+import SymptomDetailPage from './pages/SymptomDetailPage';
 
 function ProtectedRoute({ children, roles }) {
   const { user, loading } = useAuth();
-  if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin w-8 h-8 border-4 border-green-600 border-t-transparent rounded-full" /></div>;
+  if (loading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-3 bg-stone-50">
+        <div className="animate-spin w-9 h-9 border-[3px] border-emerald-600 border-t-transparent rounded-full" />
+        <p className="text-sm text-stone-400 animate-pulse">Loading your workspace…</p>
+      </div>
+    );
+  }
   if (!user) return <Navigate to="/login" replace />;
   if (roles && !roles.includes(user.role)) return <Navigate to="/dashboard" replace />;
   return children;
@@ -54,6 +66,7 @@ function AppRoutes() {
         <Route path="/plants" element={<PlantsPage />} />
         <Route path="/plants/:id" element={<PlantDetailPage />} />
         <Route path="/symptoms" element={<SymptomsPage />} />
+        <Route path="/symptoms/:id" element={<SymptomDetailPage />} />
         <Route path="/identify" element={<IdentifyPage />} />
         <Route path="/articles" element={<ArticlesPage />} />
         <Route path="/articles/:slug" element={<ArticleDetailPage />} />
@@ -118,6 +131,7 @@ function AppRoutes() {
         <Route path="/admin/plants/new" element={<ProtectedRoute roles={['ADMIN']}><PlantsManagement /></ProtectedRoute>} />
         <Route path="/admin/plants/:id/edit" element={<ProtectedRoute roles={['ADMIN']}><PlantsManagement /></ProtectedRoute>} />
         <Route path="/admin/knowledge" element={<ProtectedRoute roles={['ADMIN']}><KnowledgeManagement /></ProtectedRoute>} />
+        <Route path="/admin/symptoms" element={<ProtectedRoute roles={['ADMIN']}><SymptomsManagement /></ProtectedRoute>} />
         <Route path="/admin/practitioners" element={
           <ProtectedRoute roles={['ADMIN']}><PractitionersAdmin /></ProtectedRoute>
         } />
@@ -145,7 +159,12 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <NotificationProvider>
-          <AppRoutes />
+          <ToastProvider>
+            <ConfirmProvider>
+              <AppRoutes />
+              <ToastViewport />
+            </ConfirmProvider>
+          </ToastProvider>
         </NotificationProvider>
       </AuthProvider>
     </BrowserRouter>

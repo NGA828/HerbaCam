@@ -6,6 +6,7 @@ from .serializers import (
     PlantListSerializer, PlantDetailSerializer,
     PlantLocalNameSerializer, PlantPartSerializer, PlantAdminSerializer
 )
+from accounts.permissions import IsStaffOrReadOnly
 from audit.services import log_action
 
 
@@ -61,7 +62,7 @@ class PlantDetailView(generics.RetrieveAPIView):
 class PlantAdminListView(generics.ListCreateAPIView):
     """Admin: manage plants."""
     serializer_class = PlantAdminSerializer
-    permission_classes = [IsAdminOrReadOnly]
+    permission_classes = [IsStaffOrReadOnly]
     queryset = Plant.objects.all()
 
     def perform_create(self, serializer):
@@ -73,8 +74,11 @@ class PlantAdminListView(generics.ListCreateAPIView):
 
 class PlantAdminDetailView(generics.RetrieveUpdateDestroyAPIView):
     """Admin: manage individual plant."""
+
+    # The client edits with PATCH; PUT (full replacement) is not offered.
+    http_method_names = ['get', 'head', 'options', 'patch', 'delete']
     serializer_class = PlantAdminSerializer
-    permission_classes = [IsAdminOrReadOnly]
+    permission_classes = [IsStaffOrReadOnly]
     queryset = Plant.objects.all()
 
     def perform_update(self, serializer):

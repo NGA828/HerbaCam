@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Leaf, Menu, X, User, LogIn } from 'lucide-react';
+import { useToast } from '../contexts/ToastContext';
+import { Leaf, Menu, X, LayoutDashboard, LogOut } from 'lucide-react';
 
 export default function Navbar() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  const { toast } = useToast();
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
@@ -44,10 +46,11 @@ export default function Navbar() {
               <Link
                 key={link.path}
                 to={link.path}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                data-active={location.pathname === link.path}
+                className={`link-underline px-4 py-2 text-sm font-medium transition-colors ${
                   location.pathname === link.path
-                    ? 'text-green-700 bg-green-50'
-                    : 'text-stone-600 hover:text-green-700 hover:bg-green-50/50'
+                    ? 'text-green-700'
+                    : 'text-stone-600 hover:text-green-700'
                 }`}
               >
                 {link.label}
@@ -58,12 +61,23 @@ export default function Navbar() {
           {/* Auth buttons */}
           <div className="hidden md:flex items-center gap-3">
             {user ? (
-              <Link
-                to={user.role === 'ADMIN' ? '/admin/dashboard' : user.role === 'EXPERT' ? '/expert/dashboard' : user.role === 'PRACTITIONER' ? '/practitioner/dashboard' : '/dashboard'}
-                className="flex items-center gap-2 px-4 py-2 bg-green-700 text-white rounded-lg text-sm font-medium hover:bg-green-800 transition-colors shadow-sm"
-              >
-                <User className="w-4 h-4" /> Dashboard
-              </Link>
+              <div className="flex items-center gap-2">
+                <Link
+                  to={user.role === 'ADMIN' ? '/admin/dashboard' : user.role === 'EXPERT' ? '/expert/dashboard' : user.role === 'PRACTITIONER' ? '/practitioner/dashboard' : '/dashboard'}
+                  className="flex items-center gap-2 rounded-lg bg-green-700 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-green-800 active:scale-[0.98]"
+                >
+                  <LayoutDashboard className="w-4 h-4" /> Dashboard
+                </Link>
+                <button
+                  onClick={() => {
+                    logout();
+                    toast.success('Signed out', 'You have been logged out of HerbaCam.');
+                  }}
+                  className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-stone-500 transition hover:bg-stone-100 hover:text-stone-800 active:scale-95"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              </div>
             ) : (
               <>
                 <Link to="/login" className="px-4 py-2 text-sm font-medium text-stone-700 hover:text-green-700 transition-colors">
@@ -85,7 +99,7 @@ export default function Navbar() {
 
       {/* Mobile menu */}
       {mobileOpen && (
-        <div className="md:hidden bg-white border-t border-stone-100 py-3 px-4 space-y-1 animate-in slide-in-from-top-2">
+        <div className="md:hidden bg-white border-t border-stone-100 py-3 px-4 space-y-1 animate-fade-in-up">
           {links.map((link) => (
             <Link
               key={link.path}
@@ -97,9 +111,20 @@ export default function Navbar() {
           ))}
           <hr className="my-2 border-stone-100" />
           {user ? (
-            <Link to="/dashboard" className="block px-4 py-2.5 rounded-lg text-sm font-medium bg-green-50 text-green-700">
-              Dashboard
-            </Link>
+            <>
+              <Link
+                to={user.role === 'ADMIN' ? '/admin/dashboard' : user.role === 'EXPERT' ? '/expert/dashboard' : user.role === 'PRACTITIONER' ? '/practitioner/dashboard' : '/dashboard'}
+                className="block rounded-lg bg-green-50 px-4 py-2.5 text-sm font-medium text-green-700"
+              >
+                Dashboard
+              </Link>
+              <button
+                onClick={() => { logout(); toast.success('Signed out', 'You have been logged out of HerbaCam.'); }}
+                className="block w-full rounded-lg px-4 py-2.5 text-left text-sm font-medium text-stone-600 transition hover:bg-stone-100"
+              >
+                Log out
+              </button>
+            </>
           ) : (
             <>
               <Link to="/login" className="block px-4 py-2.5 rounded-lg text-sm font-medium text-stone-700">Log in</Link>

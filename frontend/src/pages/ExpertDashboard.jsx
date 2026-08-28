@@ -1,103 +1,166 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { knowledgeAPI } from '../api/client';
-import { ClipboardCheck, CheckCircle, XCircle, MessageSquare } from 'lucide-react';
+import { useToast, describeError } from '../contexts/ToastContext';
+import { useConfirm } from '../components/ui/ConfirmDialog';
+import { CountUp, Reveal } from '../components/ui/motion';
+import { ClipboardCheck, CheckCircle, ArrowRight, Loader2, XCircle, Clock } from 'lucide-react';
 
 export default function ExpertDashboard() {
+  const { toast } = useToast();
+  const confirm = useConfirm();
   const [pending, setPending] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [busyId, setBusyId] = useState(null);
 
-  useEffect(() => {
-    knowledgeAPI.pending().then(r => { setPending(r.data.results || r.data); setLoading(false); }).catch(() => setLoading(false));
-  }, []);
+  const load = () => {
+    knowledgeAPI.pending({ page_size: 50 })
+      .then(r => { setPending(r.data.results || r.data); })
+      .catch(() => toast.error('Could not load the review queue', 'Please refresh to try again.'))
+      .finally(() => setLoading(false));
+  };
 
-  const handleReview = async (id, action) => {
-    const reason = action === 'reject' ? prompt('Reason for rejection:') : '';
-    if (action === 'reject' && !reason) return;
+  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const quickReview = async (id, action) => {
+    const labels = {
+      approve: ['Approve and publish?', 'The traditional use becomes public immediately.', 'Approve'],
+      reject: ['Reject this submission?', 'The contributor will be asked to submit a new version instead.', 'Reject submission'],
+    };
+    const [title, message, confirmLabel] = labels[action];
+
+    const ok = await confirm({
+      title,
+      message,
+      confirmLabel,
+      tone: action === 'reject' ? 'danger' : 'primary',
+    });
+    if (!ok) return;
+
+    setBusyId(id);
     try {
-      await knowledgeAPI.review(id, { action, reason, comments: '' });
+      await knowledgeAPI.review(id, { action, reason: action === 'reject' ? 'Rejected during quick review.' : '', comments: '' });
       setPending(prev => prev.filter(p => p.id !== id));
-    } catch {
-      alert('Review failed. Please try again.');
+      toast.success(
+        action === 'approve' ? 'Submission approved' : 'Submission rejected',
+        action === 'approve' ? 'It is now published to the knowledge base.' : 'The contributor has been notified.',
+      );
+    } catch (err) {
+      toast.error('Review failed', describeError(err));
+    } finally {
+      setBusyId(null);
     }
   };
 
+  const byStatus = pending.reduce((acc, s) => {
+    acc[s.status] = (acc[s.status] || 0) + 1;
+    return acc;
+  }, {});
+
   return (
     <div className="space-y-6">
-      <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl p-6 sm:p-8 text-white">
-        <h2 className="text-2xl font-bold mb-2">Expert Review Panel</h2>
-        <p className="text-blue-100">Review and verify traditional knowledge submissions.</p>
-      </div>
-
-      <div className="grid sm:grid-cols-3 gap-4">
-        <div className="bg-white rounded-xl p-5 border border-stone-200">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center">
-              <ClipboardCheck className="w-5 h-5 text-amber-600" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold">{pending.length}</p>
-              <p className="text-xs text-stone-500">Pending Reviews</p>
-            </div>
+      <Reveal>
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-600 via-indigo-700 to-indigo-900 p-6 text-white shadow-lg sm:p-8">
+          <div className="pointer-events-none absolute -right-14 -top-16 h-56 w-56 rounded-full bg-white/10 blur-2xl" />
+          <div className="relative">
+            <h2 className="text-2xl font-bold mb-2">Expert Review Panel</h2>
+            <p className="text-blue-100">Review and verify traditional knowledge submissions.</p>
+            <Link
+              to="/expert/reviews"
+              className="mt-5 inline-flex items-center gap-2 rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-indigo-700 shadow-sm transition hover:bg-indigo-50 active:scale-[0.98]"
+            >
+              Open review queue <ArrowRight className="h-4 w-4" />
+            </Link>
           </div>
         </div>
+      </Reveal>
+
+      <div className="grid gap-4 sm:grid-cols-3">
+        {[
+          { icon: ClipboardCheck, label: 'Awaiting review', value: pending.length, tone: 'bg-amber-50 text-amber-600' },
+          { icon: Clock, label: 'Submitted', value: byStatus.SUBMITTED || 0, tone: 'bg-sky-50 text-sky-600' },
+          { icon: XCircle, label: 'In revision', value: byStatus.REVISION_REQUESTED || 0, tone: 'bg-violet-50 text-violet-600' },
+        ].map((stat, i) => (
+          <Reveal key={stat.label} delay={i * 70}>
+            <div className="rounded-xl border border-stone-200 bg-white p-5 transition hover:-translate-y-0.5 hover:shadow-md">
+              <div className="flex items-center gap-3">
+                <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${stat.tone}`}>
+                  <stat.icon className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-stone-800"><CountUp value={stat.value} /></p>
+                  <p className="text-xs text-stone-500">{stat.label}</p>
+                </div>
+              </div>
+            </div>
+          </Reveal>
+        ))}
       </div>
 
-      <div className="bg-white rounded-xl border border-stone-200 p-6">
-        <h3 className="font-semibold text-stone-800 mb-4">Pending Submissions</h3>
+      <div className="rounded-xl border border-stone-200 bg-white p-6">
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="font-semibold text-stone-800">Pending Submissions</h3>
+          <Link to="/expert/reviews" className="text-sm font-medium text-emerald-700 transition hover:text-emerald-800">
+            View all →
+          </Link>
+        </div>
+
         {loading ? (
-          <div className="space-y-3">{[1,2,3].map(i => <div key={i} className="h-24 bg-stone-100 rounded-lg animate-pulse" />)}</div>
+          <div className="space-y-3">
+            {[1, 2, 3].map(i => <div key={i} className="skeleton-shimmer h-24 rounded-lg" />)}
+          </div>
         ) : pending.length === 0 ? (
-          <div className="text-center py-8">
-            <CheckCircle className="w-12 h-12 text-green-300 mx-auto mb-3" />
+          <div className="animate-fade-in-up py-8 text-center">
+            <CheckCircle className="mx-auto mb-3 h-12 w-12 text-green-300" />
             <p className="text-stone-500">All caught up! No pending submissions.</p>
           </div>
         ) : (
           <div className="space-y-4">
-            {pending.map(sub => (
-              <div key={sub.id} className="border border-stone-200 rounded-xl p-5">
-                <div className="flex items-start justify-between gap-4 mb-3">
-                  <div>
-                    <h4 className="font-semibold text-stone-800">
-                      Submission #{sub.id} by {sub.contributor_name || 'Practitioner'}
-                    </h4>
-                    <p className="text-sm text-stone-500">{new Date(sub.created_at).toLocaleDateString()}</p>
+            {pending.map((sub, index) => (
+              <Reveal key={sub.id} delay={Math.min(index * 60, 300)}>
+                <div className="rounded-xl border border-stone-200 p-5 transition hover:-translate-y-0.5 hover:shadow-md">
+                  <div className="mb-3 flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <h4 className="font-semibold text-stone-800">
+                        {sub.plant_name || sub.proposed_scientific_name || 'Plant request'}
+                      </h4>
+                      <p className="mt-0.5 text-xs text-stone-500">
+                        {sub.contributor_name || 'Contributor'}
+                        {sub.region_name ? ` · ${sub.region_name}` : ''}
+                      </p>
+                    </div>
+                    <span className="shrink-0 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
+                      {sub.status.replace('_', ' ')}
+                    </span>
                   </div>
-                  <span className="text-xs px-2.5 py-1 bg-blue-50 text-blue-700 rounded-full">{sub.status}</span>
-                </div>
 
-                <div className="grid sm:grid-cols-2 gap-3 text-sm mb-4">
-                  <div><span className="text-stone-500">Plant:</span> <span className="font-medium">{sub.plant_name || sub.proposed_scientific_name || 'N/A'}</span></div>
-                  <div><span className="text-stone-500">Local Name:</span> <span className="font-medium">{sub.local_name || 'N/A'}</span></div>
-                  <div><span className="text-stone-500">Symptom:</span> <span className="font-medium">{sub.proposed_symptom_name || sub.symptom || 'N/A'}</span></div>
-                  <div><span className="text-stone-500">Region:</span> <span className="font-medium">{sub.region || 'N/A'}</span></div>
-                  <div><span className="text-stone-500">Part:</span> <span className="font-medium">{sub.plant_part || 'N/A'}</span></div>
-                  <div><span className="text-stone-500">Preparation:</span> <span className="font-medium">{sub.preparation_method || 'N/A'}</span></div>
-                </div>
+                  <p className="line-clamp-2 text-sm text-stone-600">{sub.traditional_use_description}</p>
 
-                <p className="text-sm text-stone-700 bg-stone-50 rounded-lg p-3 mb-4">
-                  <strong>Description:</strong> {sub.traditional_use_description}
-                </p>
-                {sub.cultural_context && (
-                  <p className="text-sm text-amber-700 bg-amber-50 rounded-lg p-3 mb-4 italic">
-                    <strong>Cultural Context:</strong> {sub.cultural_context}
-                  </p>
-                )}
-
-                <div className="flex gap-3">
-                  <button onClick={() => handleReview(sub.id, 'approve')}
-                    className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-colors">
-                    <CheckCircle className="w-4 h-4" /> Approve
-                  </button>
-                  <button onClick={() => handleReview(sub.id, 'reject')}
-                    className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition-colors">
-                    <XCircle className="w-4 h-4" /> Reject
-                  </button>
-                  <button onClick={() => handleReview(sub.id, 'request_revision')}
-                    className="flex items-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-lg text-sm font-medium hover:bg-amber-600 transition-colors">
-                    <MessageSquare className="w-4 h-4" /> Request Revision
-                  </button>
+                  <div className="mt-4 flex flex-wrap items-center gap-2">
+                    <Link
+                      to={`/expert/reviews/${sub.id}`}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-700 px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-emerald-800 active:scale-95"
+                    >
+                      Full review <ArrowRight className="h-3.5 w-3.5" />
+                    </Link>
+                    <button
+                      onClick={() => quickReview(sub.id, 'approve')}
+                      disabled={busyId === sub.id}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-stone-200 px-3.5 py-2 text-xs font-semibold text-stone-700 transition hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 active:scale-95 disabled:opacity-60"
+                    >
+                      {busyId === sub.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5" />}
+                      Approve
+                    </button>
+                    <button
+                      onClick={() => quickReview(sub.id, 'reject')}
+                      disabled={busyId === sub.id}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-stone-200 px-3.5 py-2 text-xs font-semibold text-stone-700 transition hover:border-red-300 hover:bg-red-50 hover:text-red-700 active:scale-95 disabled:opacity-60"
+                    >
+                      <XCircle className="h-3.5 w-3.5" /> Reject
+                    </button>
+                  </div>
                 </div>
-              </div>
+              </Reveal>
             ))}
           </div>
         )}

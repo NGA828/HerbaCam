@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link, useLocation, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useNotifications } from '../contexts/NotificationContext';
+import { PageTransition } from '../components/ui/motion';
 import {
   Home, Leaf, Search, Camera, Heart, Clock, BookOpen, User, Bell,
   Menu, X, LogOut, ChevronDown, FileText, BarChart3, Shield,
@@ -61,7 +62,7 @@ function NotificationDropdown({ onClose }) {
   return (
     <>
       <div className="fixed inset-0 z-40" onClick={onClose} />
-      <div className="absolute right-0 top-12 w-80 bg-white rounded-xl shadow-xl border border-stone-200 z-50 overflow-hidden">
+      <div className="absolute right-0 top-12 w-80 bg-white rounded-xl shadow-xl border border-stone-200 z-50 overflow-hidden animate-scale-in">
         <div className="p-4 border-b border-stone-100 flex items-center justify-between">
           <h3 className="font-semibold text-stone-800">Notifications</h3>
           {notifications.filter(n => !n.is_read).length > 0 && (
@@ -127,7 +128,7 @@ export default function DashboardLayout() {
     <div className="flex h-screen overflow-hidden bg-stone-50">
       {/* Mobile overlay */}
       {sidebarOpen && (
-        <div className="fixed inset-0 bg-black/40 z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />
+        <div className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[1px] animate-fade-in lg:hidden" onClick={() => setSidebarOpen(false)} />
       )}
 
       {/* Sidebar */}
@@ -221,7 +222,7 @@ export default function DashboardLayout() {
               {profileOpen && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setProfileOpen(false)} />
-                  <div className="absolute right-0 top-12 w-56 bg-white rounded-xl shadow-lg border border-stone-200 py-2 z-50">
+                  <div className="absolute right-0 top-12 w-56 bg-white rounded-xl shadow-lg border border-stone-200 py-2 z-50 animate-scale-in">
                     <div className="px-4 py-2 border-b border-stone-100">
                       <p className="font-medium text-sm">{user?.first_name} {user?.last_name}</p>
                       <p className="text-xs text-stone-500">{user?.email}</p>
@@ -246,7 +247,9 @@ export default function DashboardLayout() {
 
         {/* Content */}
         <main className="flex-1 overflow-y-auto p-4 lg:p-6">
-          <Outlet />
+          <PageTransition>
+            <Outlet />
+          </PageTransition>
         </main>
       </div>
     </div>

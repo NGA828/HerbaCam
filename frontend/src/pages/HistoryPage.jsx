@@ -1,23 +1,57 @@
 import { useState, useEffect } from 'react';
 import { identificationAPI } from '../api/client';
-import { Camera, Trash2, Leaf } from 'lucide-react';
+import { useToast } from '../contexts/ToastContext';
+import { useConfirm } from '../components/ui/ConfirmDialog';
+import { Reveal } from '../components/ui/motion';
+import { Camera, Trash2, Leaf, Flag, ExternalLink } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { plantImage } from '../utils/images';
 
 export default function HistoryPage() {
+  const { toast } = useToast();
+  const confirm = useConfirm();
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const fetch = () => {
-    identificationAPI.history().then(r => { setHistory(r.data.results || r.data); setLoading(false); }).catch(() => setLoading(false));
+    identificationAPI.history()
+      .then(r => { setHistory(r.data.results || r.data); })
+      .catch(() => toast.error('Could not load history', 'Your identification history did not load.'))
+      .finally(() => setLoading(false));
   };
 
-  useEffect(() => { fetch(); }, []);
+  useEffect(() => { fetch(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleDelete = async (id) => {
-    if (!confirm('Delete this identification from history?')) return;
-    await identificationAPI.delete(id);
-    setHistory(prev => prev.filter(h => h.id !== id));
+    const ok = await confirm({
+      title: 'Delete this identification?',
+      message: 'The image and its results will be removed from your history. This cannot be undone.',
+      confirmLabel: 'Delete',
+    });
+    if (!ok) return;
+    try {
+      await identificationAPI.delete(id);
+      setHistory(prev => prev.filter(h => h.id !== id));
+      toast.success('Identification deleted', 'The record was removed from your history.');
+    } catch {
+      toast.error('Delete failed', 'The identification could not be removed.');
+    }
+  };
+
+  const handleReport = async (item) => {
+    const ok = await confirm({
+      title: 'Report this identification?',
+      message: 'Let reviewers know the result is wrong so matching can improve.',
+      confirmLabel: 'Send report',
+      tone: 'primary',
+    });
+    if (!ok) return;
+    try {
+      await identificationAPI.report(item.id, { reason: 'Incorrect identification reported from history' });
+      toast.success('Report sent', 'Thank you — reviewers will check this result.');
+    } catch {
+      toast.error('Could not send report', 'Please try again in a moment.');
+    }
   };
 
   return (
@@ -39,8 +73,9 @@ export default function HistoryPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {history.map(item => (
-            <div key={item.id} className="bg-white rounded-xl border border-stone-200 p-4 flex items-center gap-4">
+          {history.map((item, index) => (
+            <Reveal key={item.id} delay={Math.min(index * 50, 300)}>
+            <div className="bg-white rounded-xl border border-stone-200 p-4 flex items-center gap-4 transition hover:-translate-y-0.5 hover:shadow-md">
               <div className="w-16 h-16 bg-stone-100 rounded-lg overflow-hidden shrink-0">
                 {item.image && <img src={plantImage(item.image)} alt="" className="w-full h-full object-cover transition-transform hover:scale-110" />}
               </div>
@@ -53,17 +88,26 @@ export default function HistoryPage() {
                   {' • '}{new Date(item.created_at).toLocaleString()}
                 </p>
               </div>
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-1 shrink-0">
+                <Link to={`/user/identify/${item.id}`} title="Open result" className="p-2 text-emerald-600 rounded-lg transition hover:bg-emerald-50">
+                  <ExternalLink className="w-4 h-4" />
+                </Link>
                 {item.primary_result?.plant && (
-                  <Link to={`/plants/${item.primary_result.plant}`} className="p-2 text-green-600 hover:bg-green-50 rounded-lg">
+                  <Link to={`/plants/${item.primary_result.plant}`} title="View plant" className="p-2 text-green-600 rounded-lg transition hover:bg-green-50">
                     <Leaf className="w-4 h-4" />
                   </Link>
                 )}
-                <button onClick={() => handleDelete(item.id)} className="p-2 text-red-400 hover:bg-red-50 rounded-lg">
+                {item.status === 'COMPLETED' && (
+                  <button onClick={() => handleReport(item)} title="Report incorrect" className="p-2 text-amber-500 rounded-lg transition hover:bg-amber-50">
+                    <Flag className="w-4 h-4" />
+                  </button>
+                )}
+                <button onClick={() => handleDelete(item.id)} title="Delete" className="p-2 text-red-400 rounded-lg transition hover:bg-red-50 active:scale-90">
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
             </div>
+            </Reveal>
           ))}
         </div>
       )}

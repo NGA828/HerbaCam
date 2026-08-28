@@ -45,7 +45,7 @@ cp .env.example .env
 cd backend
 pip install -r requirements.txt
 python manage.py migrate
-python manage.py seed_data   # Load demo data + copy plant images into backend/media/
+python manage.py seed_data --clear   # Load demo data + copy plant images into backend/media/
 python manage.py runserver 0.0.0.0:8000
 ```
 
@@ -69,12 +69,40 @@ Visit http://localhost:5173
 
 ## Demo Accounts
 
+All demo accounts share the password pattern below; every role has several
+accounts so notifications, reviews and audit history have realistic actors.
+
 | Role | Username | Password |
 |------|----------|----------|
-| Admin | admin | admin123! |
-| Expert | drnkeng | expert123! |
-| Practitioner | mbaforc | pract123! |
-| User | demo_user | user1234! |
+| Admin | `admin`, `nadege` | `admin123!` |
+| Expert | `drnkeng`, `dretoundi`, `profeyong` | `expert123!` |
+| Practitioner | `mbaforc`, `talla_e`, `njikam_a`, `awah_p`, `bongfen_r` | `pract123!` |
+| User | `demo_user` (+ 5 more) | `user1234!` |
+
+### Demo dataset
+
+`python manage.py seed_data --clear` builds a complete, deterministic dataset
+(seeded with `random.Random(20260828)`, timestamps back-dated over ~3 years):
+
+| Entity | Count | Notes |
+| --- | --- | --- |
+| Users | 16 | 2 admins, 3 experts, 6 practitioners, 5 users |
+| Plants | 32 | With local names, parts, regions, images |
+| Symptoms | 32 | Across 16 categories |
+| Traditional uses | 109 | Every plant/region combination referenced |
+| Evidence records | 45 | INSUFFICIENT → STRONG |
+| Safety records | 32 | LOW / MODERATE / HIGH |
+| Knowledge submissions | 29 | Every workflow status, incl. rejected and in-revision |
+| AI identifications | 42 | COMPLETED / PROCESSING / FAILED |
+| Favorites | 45 | Spread across users |
+| Notifications | 80 | Submission, review and identification events |
+| Risk assessments | 42 | LOW / MODERATE / HIGH with component scores |
+| Audit log entries | 148+ | Logins, reviews, admin actions |
+| Regions / divisions / communities | 10 / 40 / 120 | The real Cameroonian administrative tree |
+| Articles | 14 | Published and draft, across 6 categories |
+
+Always pass `--clear`: the seeder is idempotent only when it starts from an
+empty database.
 
 ## Environment Variables
 
@@ -161,28 +189,76 @@ The risk score (0-100) is calculated from five component scores (0-20 each):
 
 ## API Endpoints
 
+The full, generated **API ↔ frontend map** lives in
+[`docs/API_ENDPOINT_MAP.md`](docs/API_ENDPOINT_MAP.md): every backend route,
+the axios binding that calls it, and the page that uses it.
+
+Two checks keep that map honest — both are plain-Python and run anywhere:
+
+```bash
+python scripts/verify_endpoint_map.py --markdown docs/API_ENDPOINT_MAP.md
+# backend endpoints : 82 / frontend calls : 82 / matched 1:1 : 82
+# orphan endpoints  : 0   / unmatched calls : 0
+
+python scripts/smoke_endpoints.py          # logs in as every role and calls every route
+```
+
+Highlights:
+
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | /api/auth/login/ | POST | JWT Login |
 | /api/auth/register/ | POST | User registration |
-| /api/auth/profile/ | GET/PATCH | User profile |
-| /api/plants/ | GET | List plants |
+| /api/auth/profile/ | GET/PATCH | User profile (PATCH only — no PUT) |
+| /api/auth/settings/ | GET/PUT | Non-secret system settings (admin) |
+| /api/auth/users/:id/ | GET/PATCH | Admin user management |
+| /api/plants/ | GET | List published plants |
+| /api/plants/search/ | GET | Filter by region, habitat, family, part, evidence |
 | /api/plants/:id/ | GET | Plant detail |
-| /api/symptoms/ | GET | List symptoms |
+| /api/plants/admin/ | GET/POST | Curator plant management |
+| /api/plants/admin/:id/ | GET/PATCH/DELETE | Curator plant management |
+| /api/symptoms/ · /api/symptoms/:id/ | GET | Symptom index and detail |
 | /api/symptoms/search/?q= | GET | Symptom search |
+| /api/symptoms/admin/ · /api/symptoms/admin/:id/ | GET/POST · GET/PATCH/DELETE | Curator symptom management |
 | /api/identification/identify/ | POST | AI identification |
 | /api/identification/history/ | GET | ID history |
+| /api/identification/:id/ | GET | Single identification |
+| /api/identification/:id/delete/ · /report/ | DELETE · POST | Remove or dispute a result |
 | /api/knowledge/submissions/ | GET | Submissions |
 | /api/knowledge/submissions/create/ | POST | New submission |
-| /api/knowledge/submissions/:id/review/ | POST | Review |
+| /api/knowledge/submissions/pending/ | GET | Expert review queue |
+| /api/knowledge/submissions/:id/ | GET/PATCH | Detail / practitioner edit & resubmit |
+| /api/knowledge/submissions/:id/review/ | POST | approve · reject · request_revision |
 | /api/knowledge/traditional-uses/ | GET | Traditional uses |
-| /api/evidence/ | GET | Evidence records |
-| /api/safety/ | GET | Safety info |
-| /api/articles/ | GET | Articles |
-| /api/analytics/favorites/ | GET | Favorites |
-| /api/notifications/ | GET | Notifications |
-| /api/preservation/risk/ | GET | Risk assessments |
-| /api/geography/regions/ | GET | Regions |
+| /api/knowledge/preparation-methods/ | GET | Preparation vocabulary |
+| /api/evidence/ · /api/evidence/create/ · /api/evidence/:id/update/ | GET · POST · PATCH | Evidence records |
+| /api/safety/ · /api/safety/create/ · /api/safety/:id/update/ | GET · POST · PATCH | Safety records |
+| /api/articles/ · /api/articles/:slug/ · /api/articles/categories/ | GET | Reading room |
+| /api/articles/admin/ · /api/articles/admin/:id/ | GET/POST · GET/PATCH/DELETE | Article management |
+| /api/analytics/dashboard/ | GET | Role-aware platform statistics |
+| /api/analytics/favorites/ · /add/ · /remove/ · /check/:id/ | GET · POST · GET | Favorites |
+| /api/notifications/ · /unread-count/ · /:id/read/ · /mark-all-read/ | GET · POST | Notifications |
+| /api/preservation/risk/ · /risk/:id/ · /risk/calculate/ | GET · GET · POST | Preservation risk |
+| /api/geography/regions/ · /divisions/ · /communities/ | GET/POST | Administrative tree |
+| /api/geography/regions/:id/ | GET/PATCH/DELETE | Single region |
+| /api/practitioners/profile/ · /api/practitioners/list/ | GET/PATCH · GET | Practitioner profiles |
+| /api/audit/ | GET | Audit trail (admin) |
+
+## Interface conventions
+
+The UI was built so that every action gives feedback and every transition is
+animated:
+
+- **Toasts** (`useToast()`) — success, error, warning, info and loading states
+  for every mutation, plus automatic reporting of unhandled API failures
+  (network loss, 5xx, 429) from the axios layer.
+- **Confirmations** (`useConfirm()`) — destructive and role-changing actions ask
+  through an animated dialog instead of `window.confirm`.
+- **Motion** (`components/ui/motion.jsx`) — route transitions on every page,
+  scroll-reveal for cards and rows, animated KPI counters, skeleton shimmer
+  while loading, and hover/press states on interactive elements.
+- **Empty and error states** — every list explains what is missing and offers a
+  retry or a shortcut to create the first record.
 
 ## Important Disclaimers
 
