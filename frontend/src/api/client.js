@@ -7,6 +7,28 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
+/**
+ * Lightweight pub/sub so the UI can surface failures that individual pages do
+ * not handle themselves. Set `skipErrorToast: true` on a request config when a
+ * page renders its own message for that call.
+ */
+const errorListeners = new Set();
+
+export function onApiError(listener) {
+  errorListeners.add(listener);
+  return () => errorListeners.delete(listener);
+}
+
+function emitApiError(error) {
+  errorListeners.forEach((listener) => {
+    try {
+      listener(error);
+    } catch {
+      /* a broken listener must never break the request */
+    }
+  });
+}
+
 // Request interceptor - add auth token
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('access_token');
@@ -26,9 +48,9 @@ api.interceptors.response.use(
       const refreshToken = localStorage.getItem('refresh_token');
       if (refreshToken) {
         try {
-          const res = await axios.post(`${API_BASE_URL}/auth/token/refresh/`, {
-            refresh: refreshToken,
-          });
+          // Reuse the shared binding so every call site in the app goes
+          // through one declared endpoint table (see docs/API_ENDPOINT_MAP.md).
+          const res = await authAPI.refreshToken(refreshToken);
           localStorage.setItem('access_token', res.data.access);
           originalRequest.headers.Authorization = `Bearer ${res.data.access}`;
           return api(originalRequest);
@@ -40,6 +62,14 @@ api.interceptors.response.use(
         }
       }
     }
+
+    // Unrecoverable failures (network, 5xx, rate limiting) always reach the
+    // user, even when the calling page forgot to handle them.
+    const status = error.response?.status;
+    if (!error.config?.skipErrorToast && (!status || status >= 500 || status === 429)) {
+      emitApiError(error);
+    }
+
     return Promise.reject(error);
   }
 );
@@ -52,6 +82,8 @@ export const authAPI = {
   getProfile: () => api.get('/auth/profile/'),
   updateProfile: (data) => api.patch('/auth/profile/', data, data instanceof FormData ? { headers: { 'Content-Type': 'multipart/form-data' } } : undefined),
   changePassword: (data) => api.post('/auth/change-password/', data),
+  getSettings: () => api.get('/auth/settings/'),
+  updateSettings: (data) => api.put('/auth/settings/', data),
 };
 
 // Plants API
@@ -62,6 +94,7 @@ export const plantsAPI = {
   adminList: (params) => api.get('/plants/admin/', { params }),
   adminCreate: (data) => api.post('/plants/admin/', data),
   adminUpdate: (id, data) => api.patch(`/plants/admin/${id}/`, data),
+  adminDetail: (id) => api.get(`/plants/admin/${id}/`),
   adminDelete: (id) => api.delete(`/plants/admin/${id}/`),
 };
 
@@ -70,6 +103,11 @@ export const symptomsAPI = {
   list: (params) => api.get('/symptoms/', { params }),
   detail: (id) => api.get(`/symptoms/${id}/`),
   search: (q) => api.get('/symptoms/search/', { params: { q } }),
+  adminList: (params) => api.get('/symptoms/admin/', { params }),
+  adminCreate: (data) => api.post('/symptoms/admin/', data),
+  adminDetail: (id) => api.get(`/symptoms/admin/${id}/`),
+  adminUpdate: (id, data) => api.patch(`/symptoms/admin/${id}/`, data),
+  adminDelete: (id) => api.delete(`/symptoms/admin/${id}/`),
 };
 
 // Identification API
@@ -119,6 +157,9 @@ export const geographyAPI = {
   communities: (params) => api.get('/geography/communities/', { params }),
   createRegion: (data) => api.post('/geography/regions/?detailed=1', data),
   updateRegion: (id, data) => api.patch(`/geography/regions/${id}/`, data),
+  deleteRegion: (id) => api.delete(`/geography/regions/${id}/`),
+  createDivision: (data) => api.post('/geography/divisions/', data),
+  createCommunity: (data) => api.post('/geography/communities/', data),
 };
 
 // Articles API
@@ -128,6 +169,7 @@ export const articlesAPI = {
   categories: () => api.get('/articles/categories/'),
   adminList: (params) => api.get('/articles/admin/', { params }),
   adminCreate: (data) => api.post('/articles/admin/', data),
+  adminDetail: (id) => api.get(`/articles/admin/${id}/`),
   adminUpdate: (id, data) => api.patch(`/articles/admin/${id}/`, data),
   adminDelete: (id) => api.delete(`/articles/admin/${id}/`),
 };

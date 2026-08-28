@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { knowledgeAPI, plantsAPI, symptomsAPI, geographyAPI } from '../api/client';
-import { FileText, Save, Send } from 'lucide-react';
+import { useToast, describeError } from '../contexts/ToastContext';
+import { Reveal } from '../components/ui/motion';
+import { Save, Send, Loader2 } from 'lucide-react';
 
 export default function KnowledgeSubmissionForm() {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [form, setForm] = useState({
     plant: '', proposed_scientific_name: '', proposed_common_name: '',
     local_name: '', language: '', symptom: '', proposed_symptom_name: '',
@@ -16,23 +19,45 @@ export default function KnowledgeSubmissionForm() {
   const [regions, setRegions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [communities, setCommunities] = useState([]);
+  const [methods, setMethods] = useState([]);
 
   useEffect(() => {
-    plantsAPI.list().then(r => setPlants(r.data.results || r.data)).catch(() => {});
-    symptomsAPI.list().then(r => setSymptoms(r.data.results || r.data)).catch(() => {});
-    geographyAPI.regions().then(r => setRegions(r.data.results || r.data)).catch(() => {});
+    plantsAPI.list({ page_size: 200 }).then(r => setPlants(r.data.results || r.data)).catch(() => {});
+    symptomsAPI.list({ page_size: 200 }).then(r => setSymptoms(r.data.results || r.data)).catch(() => {});
+    geographyAPI.regions({ page_size: 50 }).then(r => setRegions(r.data.results || r.data)).catch(() => {});
+    knowledgeAPI.preparationMethods({ page_size: 50 }).then(r => setMethods(r.data.results || r.data)).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!form.region) { setCommunities([]); return; }
+    geographyAPI.communities({ region: form.region, page_size: 100 })
+      .then(r => setCommunities(r.data.results || r.data))
+      .catch(() => setCommunities([]));
+  }, [form.region]);
 
   const handleSubmit = async (e, isDraft = false) => {
     e.preventDefault();
+    if (!form.traditional_use_description.trim()) {
+      setError('Describe how the plant is traditionally used — it is the core of the record.');
+      toast.warning('Description required', 'Reviewers cannot verify a submission without the preparation and use description.');
+      return;
+    }
     setLoading(true);
     setError('');
     try {
       const data = { ...form, status: isDraft ? 'DRAFT' : 'SUBMITTED' };
       await knowledgeAPI.createSubmission(data);
+      if (isDraft) {
+        toast.success('Draft saved', 'You can finish and submit it later from your contributions.');
+      } else {
+        toast.success('Submitted for review', 'An expert reviewer has been notified.');
+      }
       navigate('/practitioner/contributions');
     } catch (err) {
-      setError('Submission failed. Please check your input and try again.');
+      const message = describeError(err);
+      setError(message);
+      toast.error(isDraft ? 'Could not save draft' : 'Submission failed', message);
     } finally {
       setLoading(false);
     }
@@ -45,8 +70,9 @@ export default function KnowledgeSubmissionForm() {
         <p className="text-stone-500 mt-1">Share your knowledge about medicinal plants. All submissions will be reviewed by experts.</p>
       </div>
 
-      {error && <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">{error}</div>}
+      {error && <div className="mb-4 flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 animate-shake">{error}</div>}
 
+      <Reveal>
       <form onSubmit={(e) => handleSubmit(e, false)} className="space-y-6 bg-white rounded-2xl border border-stone-200 p-6">
         <section>
           <h3 className="font-semibold text-stone-800 mb-4 pb-2 border-b border-stone-100">Plant Information</h3>
@@ -118,13 +144,19 @@ export default function KnowledgeSubmissionForm() {
               <select value={form.preparation_method} onChange={e => setForm({...form, preparation_method: e.target.value})}
                 className="w-full px-3 py-2.5 bg-stone-50 border border-stone-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none">
                 <option value="">Select...</option>
-                <option value="DECOCTION">Decoction (Boiling)</option>
-                <option value="INFUSION">Infusion (Steeping)</option>
-                <option value="POULTICE">Poultice</option>
-                <option value="POWDER">Powder</option>
-                <option value="JUICE">Fresh Juice</option>
-                <option value="RAW">Raw</option>
-                <option value="OTHER">Other</option>
+                {methods.length ? methods.map(m => (
+                  <option key={m.id} value={m.name}>{m.name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</option>
+                )) : (
+                  <>
+                    <option value="DECOCTION">Decoction</option>
+                    <option value="INFUSION">Infusion</option>
+                    <option value="POULTICE">Poultice</option>
+                    <option value="POWDER">Powder</option>
+                    <option value="JUICE">Juice</option>
+                    <option value="RAW">Raw</option>
+                    <option value="OTHER">Other</option>
+                  </>
+                )}
               </select>
             </div>
           </div>
@@ -157,8 +189,18 @@ export default function KnowledgeSubmissionForm() {
             </div>
             <div>
               <label className="block text-sm font-medium text-stone-700 mb-1">Community</label>
-              <input type="text" value={form.community_name} onChange={e => setForm({...form, community_name: e.target.value})}
-                className="w-full px-3 py-2.5 bg-stone-50 border border-stone-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none" />
+              {communities.length > 0 ? (
+                <select value={form.community_name} onChange={e => setForm({...form, community_name: e.target.value})}
+                  className="w-full px-3 py-2.5 bg-stone-50 border border-stone-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none">
+                  <option value="">-- Select a community --</option>
+                  {communities.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                </select>
+              ) : (
+                <input type="text" value={form.community_name} onChange={e => setForm({...form, community_name: e.target.value})}
+                  placeholder="Type the community name"
+                  className="w-full px-3 py-2.5 bg-stone-50 border border-stone-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none" />
+              )}
+              <p className="mt-1 text-xs text-stone-400">{communities.length ? 'Communities recorded for the selected region.' : 'Select a region to pick a recorded community, or type the name.'}</p>
             </div>
           </div>
           <div className="mt-4">
@@ -172,15 +214,16 @@ export default function KnowledgeSubmissionForm() {
 
         <div className="flex gap-3 pt-4 border-t border-stone-100">
           <button type="submit" disabled={loading}
-            className="flex-1 flex items-center justify-center gap-2 py-3 bg-green-700 text-white rounded-xl font-semibold hover:bg-green-800 disabled:opacity-50 transition-all">
-            <Send className="w-4 h-4" /> {loading ? 'Submitting...' : 'Submit for Review'}
+            className="flex-1 flex items-center justify-center gap-2 py-3 bg-green-700 text-white rounded-xl font-semibold hover:bg-green-800 disabled:opacity-50 transition-all active:scale-[0.99]">
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} {loading ? 'Submitting…' : 'Submit for Review'}
           </button>
           <button type="button" onClick={(e) => handleSubmit(e, true)} disabled={loading}
-            className="flex items-center gap-2 px-6 py-3 bg-stone-200 text-stone-700 rounded-xl font-medium hover:bg-stone-300 disabled:opacity-50 transition-all">
+            className="flex items-center gap-2 px-6 py-3 bg-stone-200 text-stone-700 rounded-xl font-medium hover:bg-stone-300 disabled:opacity-50 transition-all active:scale-[0.99]">
             <Save className="w-4 h-4" /> Save Draft
           </button>
         </div>
       </form>
+      </Reveal>
     </div>
   );
 }

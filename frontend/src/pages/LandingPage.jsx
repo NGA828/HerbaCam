@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import {
   Camera, Search, Leaf, MapPin, Shield, BookOpen, ChevronRight,
   Brain, Users, BarChart3, AlertTriangle, Sparkles, ArrowRight,
-  Eye, Heart, Globe, TrendingUp, CheckCircle
+  Eye, Globe, TrendingUp, CheckCircle
 } from 'lucide-react';
 import { plantsAPI, articlesAPI, analyticsAPI } from '../api/client';
 import heroImg from '../assets/hero-botanical.jpg';
@@ -168,7 +168,7 @@ export default function LandingPage() {
               { icon: Leaf, value: stats?.total_plants || 8, suffix: '+', label: 'Medicinal Plants' },
               { icon: Search, value: stats?.total_traditional_uses || 16, suffix: '+', label: 'Traditional Uses' },
               { icon: MapPin, value: 10, label: 'Regions Covered' },
-              { icon: Users, value: 12, label: 'Symptoms Indexed' },
+              { icon: Users, value: stats?.total_symptoms || 32, label: 'Symptoms Indexed' },
             ].map((stat, i) => (
               <ScrollReveal key={i} delay={i * 100}>
                 <div className="text-center">
@@ -338,8 +338,8 @@ export default function LandingPage() {
                         <span className="font-semibold text-stone-800">{item.score}/100</span>
                       </div>
                       <div className="h-2.5 bg-stone-100 rounded-full overflow-hidden">
-                        <div className={`h-full ${item.color} rounded-full transition-all duration-1000 ease-out`}
-                          style={{ width: visible => `${item.score}%` }} />
+                        <div className={`bar-fill h-full ${item.color} rounded-full`}
+                          style={{ width: `${item.score}%` }} />
                       </div>
                     </div>
                   ))}

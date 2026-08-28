@@ -1,6 +1,8 @@
 from rest_framework import generics, permissions
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from accounts.permissions import IsStaffOrReadOnly
+from audit.services import log_action
 from .models import Symptom
 from .serializers import SymptomSerializer
 from knowledge.models import TraditionalUse
@@ -88,6 +90,35 @@ class SymptomSearchView(APIView):
 
 
 class SymptomAdminListView(generics.ListCreateAPIView):
+    """Admin: list and create symptoms."""
     serializer_class = SymptomSerializer
-    permission_classes = [IsAdminOrReadOnly]
+    permission_classes = [IsStaffOrReadOnly]
     queryset = Symptom.objects.all()
+
+    def perform_create(self, serializer):
+        symptom = serializer.save()
+        log_action(self.request.user, 'SYMPTOM_CREATE',
+                   f'Created symptom: {symptom.name}',
+                   target_type='Symptom', target_id=symptom.id)
+
+
+class SymptomAdminDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """Admin: update or delete a single symptom."""
+
+    # The client edits with PATCH; PUT (full replacement) is not offered.
+    http_method_names = ['get', 'head', 'options', 'patch', 'delete']
+    serializer_class = SymptomSerializer
+    permission_classes = [IsStaffOrReadOnly]
+    queryset = Symptom.objects.all()
+
+    def perform_update(self, serializer):
+        symptom = serializer.save()
+        log_action(self.request.user, 'SYMPTOM_UPDATE',
+                   f'Updated symptom: {symptom.name}',
+                   target_type='Symptom', target_id=symptom.id)
+
+    def perform_destroy(self, instance):
+        log_action(self.request.user, 'SYMPTOM_DELETE',
+                   f'Deleted symptom: {instance.name}',
+                   target_type='Symptom', target_id=instance.id)
+        instance.delete()

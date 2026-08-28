@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Leaf, Mail, Lock, User, AlertCircle } from 'lucide-react';
+import { useToast, describeError } from '../contexts/ToastContext';
+import { Leaf, Mail, Lock, User, AlertCircle, Loader2 } from 'lucide-react';
 
 export default function RegisterPage() {
   const { register } = useAuth();
+  const { toast } = useToast();
   const navigate = useNavigate();
   const [form, setForm] = useState({
     username: '', email: '', first_name: '', last_name: '',
@@ -18,11 +20,13 @@ export default function RegisterPage() {
     setError('');
     if (form.password !== form.password_confirm) {
       setError('Passwords do not match.');
+      toast.error('Passwords do not match', 'Re-enter the same password in both fields.');
       return;
     }
     setLoading(true);
     try {
       const user = await register(form);
+      toast.success('Account created', `Welcome to HerbaCam, ${user.first_name || user.username}!`);
       navigate(user.role === 'PRACTITIONER' ? '/practitioner/dashboard' : '/dashboard');
     } catch (err) {
       const data = err.response?.data;
@@ -31,6 +35,7 @@ export default function RegisterPage() {
       } else {
         setError('Registration failed. Please try again.');
       }
+      toast.error('Registration failed', describeError(err));
     } finally {
       setLoading(false);
     }
@@ -108,8 +113,8 @@ export default function RegisterPage() {
               </div>
             </div>
             <button type="submit" disabled={loading}
-              className="w-full py-3 bg-green-700 text-white rounded-xl font-semibold hover:bg-green-800 disabled:opacity-50 transition-all shadow-sm">
-              {loading ? 'Creating Account...' : 'Create Account'}
+              className="flex w-full items-center justify-center gap-2 py-3 bg-green-700 text-white rounded-xl font-semibold hover:bg-green-800 disabled:opacity-50 transition-all shadow-sm active:scale-[0.99]">
+              {loading ? (<><Loader2 className="w-4 h-4 animate-spin" /> Creating account…</>) : 'Create Account'}
             </button>
           </form>
 

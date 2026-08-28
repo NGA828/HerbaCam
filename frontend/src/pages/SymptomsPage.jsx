@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { symptomsAPI } from '../api/client';
-import { Search, Leaf, AlertTriangle } from 'lucide-react';
+import { useToast } from '../contexts/ToastContext';
+import { Reveal } from '../components/ui/motion';
+import { Search, Leaf, AlertTriangle, Loader2 } from 'lucide-react';
 import { plantImage } from '../utils/images';
 
 export default function SymptomsPage() {
+  const { toast } = useToast();
   const [query, setQuery] = useState('');
   const [symptoms, setSymptoms] = useState([]);
   const [results, setResults] = useState(null);
@@ -17,14 +20,27 @@ export default function SymptomsPage() {
 
   const handleSearch = async (e) => {
     e?.preventDefault();
-    if (!query.trim()) return;
+    if (!query.trim()) {
+      toast.info('Enter a symptom', 'Type a symptom such as “malaria” or “cough”.');
+      return;
+    }
     setLoading(true);
     setSearched(true);
     try {
       const res = await symptomsAPI.search(query);
       setResults(res.data);
-    } catch { setResults({ results: [], symptoms: [], message: 'Search failed.' }); }
-    finally { setLoading(false); }
+      const count = res.data?.results?.length || 0;
+      if (count === 0) {
+        toast.warning('No matches', `No traditionally documented plant use was found for “${query}”.`);
+      } else {
+        toast.success(`${count} result${count === 1 ? '' : 's'} found`, `Traditional uses documented for “${query}”.`);
+      }
+    } catch {
+      setResults({ results: [], symptoms: [], message: 'Search failed.' });
+      toast.error('Search failed', 'We could not reach the symptom search service.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -44,8 +60,8 @@ export default function SymptomsPage() {
                 className="w-full pl-12 pr-4 py-4 bg-white border border-stone-200 rounded-xl text-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none" />
             </div>
             <button type="submit" disabled={loading}
-              className="px-8 py-4 bg-green-700 text-white rounded-xl font-semibold hover:bg-green-800 disabled:opacity-50 transition-all">
-              {loading ? 'Searching...' : 'Search'}
+              className="inline-flex items-center justify-center gap-2 px-8 py-4 bg-green-700 text-white rounded-xl font-semibold hover:bg-green-800 disabled:opacity-50 transition-all active:scale-[0.98]">
+              {loading ? (<><Loader2 className="w-4 h-4 animate-spin" /> Searching…</>) : 'Search'}
             </button>
           </div>
         </form>
@@ -56,10 +72,11 @@ export default function SymptomsPage() {
             <p className="text-sm font-medium text-stone-500 mb-3">Popular searches:</p>
             <div className="flex flex-wrap gap-2">
               {symptoms.slice(0, 12).map(s => (
-                <button key={s.id} onClick={() => { setQuery(s.name); handleSearch(); }}
-                  className="px-4 py-2 bg-white border border-stone-200 rounded-full text-sm text-stone-700 hover:border-green-300 hover:bg-green-50 hover:text-green-700 transition-all">
+                <Link key={s.id} to={`/symptoms/${s.id}`}
+                  className="px-4 py-2 bg-white border border-stone-200 rounded-full text-sm text-stone-700 hover:border-green-300 hover:bg-green-50 hover:text-green-700 transition-all hover:-translate-y-0.5">
                   {s.name}
-                </button>
+                  {s.traditional_uses_count ? <span className="ml-1.5 text-xs text-stone-400">{s.traditional_uses_count}</span> : null}
+                </Link>
               ))}
             </div>
           </div>
@@ -78,7 +95,8 @@ export default function SymptomsPage() {
               <div className="space-y-4">
                 <p className="text-sm text-stone-500">{results.count || results.results?.length} result(s) found</p>
                 {results.results?.map((item, i) => (
-                  <div key={i} className="bg-white rounded-xl p-5 border border-stone-200 hover:shadow-md transition-all">
+                  <Reveal key={i} delay={Math.min(i * 60, 400)}>
+                  <div className="bg-white rounded-xl p-5 border border-stone-200 transition-all hover:-translate-y-0.5 hover:shadow-md">
                     <div className="flex items-start gap-4">
                       <div className="w-16 h-16 bg-green-50 rounded-xl flex items-center justify-center shrink-0">
                         {item.plant.image ? (
@@ -102,6 +120,7 @@ export default function SymptomsPage() {
                       </div>
                     </div>
                   </div>
+                  </Reveal>
                 ))}
                 <div className="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3">
                   <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />

@@ -48,6 +48,9 @@ class EvidenceCreateView(generics.CreateAPIView):
 
 
 class EvidenceUpdateView(generics.UpdateAPIView):
+
+    # The client edits with PATCH; PUT (full replacement) is not offered.
+    http_method_names = ['get', 'head', 'options', 'patch']
     serializer_class = EvidenceSerializer
     queryset = Evidence.objects.all()
     permission_classes = [IsExpertOrAdmin]

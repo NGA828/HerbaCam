@@ -8,7 +8,9 @@ from plants.models import Plant
 from plants.serializers import PlantListSerializer
 from accounts.models import User
 from knowledge.models import KnowledgeSubmission, TraditionalUse
+from symptoms.models import Symptom
 from identification.models import Identification
+from geography.models import Region
 
 
 class FavoriteListView(generics.ListAPIView):
@@ -67,7 +69,8 @@ class AnalyticsDashboardView(APIView):
         
         data = {
             'total_plants': Plant.objects.filter(is_published=True).count(),
-            'total_symptoms': 0,
+            'total_symptoms': Symptom.objects.count(),
+            'total_regions': Region.objects.count(),
             'total_traditional_uses': TraditionalUse.objects.filter(is_verified=True).count(),
             'total_identifications': Identification.objects.filter(status='COMPLETED').count(),
             'total_submissions': KnowledgeSubmission.objects.count(),

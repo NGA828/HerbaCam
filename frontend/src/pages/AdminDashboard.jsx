@@ -1,19 +1,26 @@
 import { useState, useEffect } from 'react';
 import { analyticsAPI, preservationAPI } from '../api/client';
 import { Link } from 'react-router-dom';
-import { Users, Leaf, FileText, AlertTriangle, BarChart3, Shield, MapPin, TrendingUp } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
+import { Users, Leaf, FileText, AlertTriangle, BarChart3, Shield, TrendingUp } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { useToast } from '../contexts/ToastContext';
+import { CountUp, Reveal } from '../components/ui/motion';
 
 const COLORS = ['#16a34a', '#059669', '#0d9488', '#0891b2', '#2563eb', '#7c3aed', '#c026d3', '#db2777', '#dc2626', '#ea580c'];
 
 export default function AdminDashboard() {
+  const { toast } = useToast();
   const [stats, setStats] = useState(null);
   const [risks, setRisks] = useState([]);
 
   useEffect(() => {
-    analyticsAPI.dashboard().then(r => setStats(r.data)).catch(() => {});
-    preservationAPI.risk({ level: 'HIGH' }).then(r => setRisks((r.data.results || r.data).slice(0, 5))).catch(() => {});
-  }, []);
+    analyticsAPI.dashboard()
+      .then(r => setStats(r.data))
+      .catch(() => toast.error('Dashboard data unavailable', 'Platform statistics could not be loaded.'));
+    preservationAPI.risk({ level: 'HIGH', page_size: 5 })
+      .then(r => setRisks((r.data.results || r.data).slice(0, 5)))
+      .catch(() => {});
+  }, [toast]);
 
   const userPieData = stats ? [
     { name: 'Practitioners', value: stats.total_practitioners || 0 },
@@ -47,17 +54,19 @@ export default function AdminDashboard() {
           { icon: FileText, label: 'Pending Reviews', value: stats?.pending_submissions || 0, bgColor: 'bg-amber-50', iconColor: 'text-amber-600' },
           { icon: BarChart3, label: 'Identifications', value: stats?.total_identifications || 0, bgColor: 'bg-purple-50', iconColor: 'text-purple-600' },
         ].map((stat, i) => (
-          <div key={i} className="bg-white rounded-xl p-5 border border-stone-200 hover:shadow-md transition-shadow">
-            <div className="flex items-center gap-3">
-              <div className={`w-11 h-11 rounded-xl ${stat.bgColor} flex items-center justify-center`}>
-                <stat.icon className={`w-5 h-5 ${stat.iconColor}`} />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-stone-800">{stat.value}</p>
-                <p className="text-xs text-stone-500">{stat.label}</p>
+          <Reveal key={stat.label} delay={i * 70}>
+            <div className="rounded-xl border border-stone-200 bg-white p-5 transition hover:-translate-y-0.5 hover:shadow-md">
+              <div className="flex items-center gap-3">
+                <div className={`w-11 h-11 rounded-xl ${stat.bgColor} flex items-center justify-center`}>
+                  <stat.icon className={`w-5 h-5 ${stat.iconColor}`} />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-stone-800"><CountUp value={stat.value} /></p>
+                  <p className="text-xs text-stone-500">{stat.label}</p>
+                </div>
               </div>
             </div>
-          </div>
+          </Reveal>
         ))}
       </div>
 

@@ -1,32 +1,61 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { identificationAPI } from '../api/client';
-import { Link } from 'react-router-dom';
-import { Camera, Upload, X, AlertCircle, Leaf, AlertTriangle, ArrowRight, Image, Info, Brain, FlaskConical } from 'lucide-react';
+import { Link, useParams } from 'react-router-dom';
+import { useToast } from '../contexts/ToastContext';
+import { useConfirm } from '../components/ui/ConfirmDialog';
+import { Reveal } from '../components/ui/motion';
+import {
+  Camera, Upload, X, AlertCircle, Leaf, AlertTriangle, ArrowRight, Image, Info,
+  Brain, FlaskConical, Flag, Loader2,
+} from 'lucide-react';
 
 export default function IdentifyPage() {
   const { user } = useAuth();
+  const { id } = useParams();
+  const { toast } = useToast();
+  const confirm = useConfirm();
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState(null);
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [reporting, setReporting] = useState(false);
+
+  // Visiting /user/identify/<id> reopens a previous identification.
+  useEffect(() => {
+    if (!id) return;
+    setLoading(true);
+    identificationAPI.detail(id)
+      .then((res) => {
+        setResult(res.data);
+        toast.info(`Identification #${id} loaded`, 'This is a previous result from your history.');
+      })
+      .catch(() => {
+        setError('That identification could not be loaded.');
+        toast.error('Identification unavailable', 'It may have been deleted from your history.');
+      })
+      .finally(() => setLoading(false));
+  }, [id, toast]);
 
   const handleFileChange = (e) => {
     const f = e.target.files[0];
     if (!f) return;
     if (!['image/jpeg', 'image/png', 'image/webp'].includes(f.type)) {
       setError('Please upload a JPEG, PNG, or WebP image.');
+      toast.error('Unsupported file type', 'Choose a JPEG, PNG or WebP image.');
       return;
     }
     if (f.size > 10 * 1024 * 1024) {
       setError('Image must be smaller than 10MB.');
+      toast.error('Image too large', 'The image must be under 10 MB.');
       return;
     }
     setError('');
     setFile(f);
     setPreview(URL.createObjectURL(f));
     setResult(null);
+    toast.success('Image ready', `${f.name} is ready to analyse.`);
   };
 
   const handleDrop = (e) => {
@@ -39,20 +68,63 @@ export default function IdentifyPage() {
   };
 
   const handleIdentify = async () => {
-    if (!file) return;
-    if (!user) { setError('Please log in to use plant identification.'); return; }
+    if (!file) {
+      toast.info('Choose an image first', 'Upload or drop a photo of the plant you want identified.');
+      return;
+    }
+    if (!user) {
+      setError('Please log in to use plant identification.');
+      toast.warning('Sign in required', 'Log in to analyse a plant image with AI.');
+      return;
+    }
     setLoading(true);
     setError('');
     setResult(null);
+    const pending = toast.loading('Analysing your image…', 'The vision model is comparing it with the HerbaCam library.');
     try {
       const formData = new FormData();
       formData.append('image', file);
       const res = await identificationAPI.identify(formData);
       setResult(res.data);
+      const primary = (res.data.results || []).find((r) => r.is_primary);
+      const failed = res.data.status === 'FAILED' || res.data.error;
+      toast.dismiss(pending);
+      if (failed) {
+        toast.error('Identification inconclusive', res.data.error || 'The model could not identify this image.');
+      } else {
+        toast.success(
+          'Identification complete',
+          primary ? `Best match: ${primary.scientific_name} (${Math.round((primary.confidence || 0) * 100)}% confidence).` : 'Results are ready below.',
+        );
+      }
     } catch (err) {
-      setError(err.response?.data?.error || err.response?.data?.detail || 'Identification failed. Please try again.');
+      toast.dismiss(pending);
+      const message = err.response?.data?.error || err.response?.data?.detail || 'Identification failed. Please try again.';
+      setError(message);
+      toast.error('Identification failed', message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const reportResult = async () => {
+    const idToReport = result?.id || id;
+    if (!idToReport) return;
+    const ok = await confirm({
+      title: 'Report this identification?',
+      message: 'Tell our reviewers what is wrong so the AI matching can be improved. Your report is attached to this identification.',
+      confirmLabel: 'Send report',
+      tone: 'primary',
+    });
+    if (!ok) return;
+    setReporting(true);
+    try {
+      await identificationAPI.report(idToReport, { reason: 'Flagged as incorrect from the identification screen' });
+      toast.success('Report sent', 'Thank you — our reviewers will look at this identification.');
+    } catch {
+      toast.error('Could not send report', 'Please try again from your history page.');
+    } finally {
+      setReporting(false);
     }
   };
 
@@ -156,6 +228,7 @@ export default function IdentifyPage() {
             )}
 
             {/* How it works */}
+            <Reveal>
             <div className="mt-6 bg-white rounded-xl border border-stone-200 p-5">
               <h3 className="font-semibold text-stone-800 text-sm mb-3 flex items-center gap-2">
                 <Info className="w-4 h-4 text-blue-500" /> How It Works
@@ -179,12 +252,13 @@ export default function IdentifyPage() {
                 </div>
               </div>
             </div>
+            </Reveal>
           </div>
 
           {/* Result */}
           <div>
             {result && result.results ? (
-              <div className="space-y-4">
+              <div className="space-y-4 animate-fade-in-up">
                 {/* Mode indicator */}
                 <div className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium ${
                   isDemo ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-green-50 text-green-700 border border-green-200'
@@ -260,6 +334,26 @@ export default function IdentifyPage() {
                     )}
                   </div>
                 ))}
+
+                {/* Feedback on the result */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={reportResult}
+                    disabled={reporting}
+                    className="inline-flex items-center gap-2 rounded-xl border border-stone-200 bg-white px-3.5 py-2 text-sm font-medium text-stone-600 transition hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700 active:scale-95 disabled:opacity-60"
+                  >
+                    {reporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Flag className="h-4 w-4" />}
+                    Report incorrect identification
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setFile(null); setPreview(null); setResult(null); setError(''); }}
+                    className="inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-medium text-stone-500 transition hover:bg-stone-100 hover:text-stone-800 active:scale-95"
+                  >
+                    <X className="h-4 w-4" /> Clear
+                  </button>
+                </div>
 
                 {/* Disclaimer */}
                 <div className="bg-stone-50 rounded-xl p-4 border border-stone-200">

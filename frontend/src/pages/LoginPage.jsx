@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Leaf, Mail, Lock, AlertCircle } from 'lucide-react';
+import { useToast } from '../contexts/ToastContext';
+import { Leaf, Mail, Lock, AlertCircle, Loader2 } from 'lucide-react';
 
 export default function LoginPage() {
   const { login } = useAuth();
+  const { toast } = useToast();
   const navigate = useNavigate();
   const [form, setForm] = useState({ username: '', password: '' });
   const [error, setError] = useState('');
@@ -16,9 +18,15 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const user = await login(form);
+      toast.success(
+        `Welcome back, ${user.first_name || user.username}`,
+        'You are signed in to HerbaCam.',
+      );
       navigate(user.role === 'ADMIN' ? '/admin/dashboard' : user.role === 'EXPERT' ? '/expert/dashboard' : user.role === 'PRACTITIONER' ? '/practitioner/dashboard' : '/dashboard');
     } catch (err) {
-      setError(err.response?.data?.detail || 'Invalid credentials. Please try again.');
+      const message = err.response?.data?.detail || 'Invalid credentials. Please try again.';
+      setError(message);
+      toast.error('Sign in failed', message);
     } finally {
       setLoading(false);
     }
@@ -37,7 +45,7 @@ export default function LoginPage() {
           </div>
 
           {error && (
-            <div className="mb-6 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-sm text-red-700">
+            <div className="animate-shake mb-6 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-sm text-red-700">
               <AlertCircle className="w-4 h-4 shrink-0" /> {error}
             </div>
           )}
@@ -62,8 +70,8 @@ export default function LoginPage() {
               </div>
             </div>
             <button type="submit" disabled={loading}
-              className="w-full py-3 bg-green-700 text-white rounded-xl font-semibold hover:bg-green-800 disabled:opacity-50 transition-all shadow-sm">
-              {loading ? 'Signing in...' : 'Sign In'}
+              className="flex w-full items-center justify-center gap-2 py-3 bg-green-700 text-white rounded-xl font-semibold hover:bg-green-800 disabled:opacity-50 transition-all shadow-sm active:scale-[0.99]">
+              {loading ? (<><Loader2 className="w-4 h-4 animate-spin" /> Signing in…</>) : 'Sign In'}
             </button>
           </form>
 

@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useToast, describeError } from '../contexts/ToastContext';
+import { useConfirm } from '../components/ui/ConfirmDialog';
 import {
-  AlertTriangle, Bell, Check, ClipboardCheck, ClipboardList, FileText,
-  Leaf, MapPin, Plus, ScrollText, Search, Shield, ShieldCheck, UserRound, X,
+  AlertTriangle, Bell, Check, ChevronDown, ClipboardCheck, ClipboardList, FileText,
+  Leaf, MapPin, Pencil, Plus, RefreshCw, ScrollText, Search, Shield, ShieldCheck,
+  UserRound, X,
 } from 'lucide-react';
 import {
   evidenceAPI, knowledgeAPI, notificationsAPI, plantsAPI, preservationAPI,
@@ -22,10 +25,30 @@ function StatusPill({ value }) {
   return <StatusBadge value={value} />;
 }
 
+/** One component score of a preservation risk assessment (each scored 0-20). */
+function ScoreRow({ label, value }) {
+  const score = Number(value) || 0;
+  return (
+    <div>
+      <dt className="font-semibold uppercase tracking-wide text-stone-400">{label}</dt>
+      <dd className="mt-1 flex items-center gap-2">
+        <span className="h-1.5 w-16 overflow-hidden rounded-full bg-stone-200">
+          <span
+            className="bar-fill block h-full rounded-full bg-gradient-to-r from-emerald-500 to-amber-500"
+            style={{ width: `${Math.min(100, (score / 20) * 100)}%` }}
+          />
+        </span>
+        <span className="text-stone-700">{score.toFixed(1)} / 20</span>
+      </dd>
+    </div>
+  );
+}
+
 /* ------------------------------ Notifications ------------------------------ */
 
 export function NotificationsPage() {
   const [items, setItems] = useState([]);
+  const { toast } = useToast();
   const load = () => {
     notificationsAPI.list().then((r) => setItems(extractRows(r))).catch(() => {});
   };
@@ -40,14 +63,29 @@ export function NotificationsPage() {
         title="Notifications"
         description="Updates about identifications, reviews, and account activity."
         icon={Bell}
-        action={<button onClick={() => notificationsAPI.markAllRead().then(load)} className={btnSecondary}>Mark all read</button>}
+        action={(
+          <button
+            onClick={async () => {
+              try {
+                await notificationsAPI.markAllRead();
+                toast.success('All marked as read', 'Your notification inbox is clear.');
+                load();
+              } catch (err) {
+                toast.error('Could not update notifications', describeError(err));
+              }
+            }}
+            className={btnSecondary}
+          >
+            Mark all read
+          </button>
+        )}
       />
       {!items.length ? (
         <EmptyState icon={Bell} title="No notifications yet." hint="Activity across your account will show up here." />
       ) : (
         <div className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm">
           {items.map((n) => (
-            <div key={n.id} className={`flex gap-4 border-b border-stone-100 p-4 last:border-0 ${!n.is_read ? 'bg-emerald-50/40' : ''}`}>
+            <div key={n.id} className={`animate-rise flex gap-4 border-b border-stone-100 p-4 transition-colors last:border-0 hover:bg-stone-50 ${!n.is_read ? 'bg-emerald-50/40' : ''}`}>
               <Bell className="mt-1 h-5 w-5 shrink-0 text-emerald-700" />
               <div className="min-w-0 flex-1">
                 <p className="font-semibold text-stone-800">{n.title}</p>
@@ -56,11 +94,35 @@ export function NotificationsPage() {
               </div>
               <div className="flex items-start gap-2">
                 {!n.is_read && (
-                  <button onClick={() => notificationsAPI.markRead(n.id).then(load)} aria-label="Mark as read" className="rounded-lg p-1.5 text-emerald-700 hover:bg-emerald-50">
+                  <button
+                    onClick={async () => {
+                      try {
+                        await notificationsAPI.markRead(n.id);
+                        toast.success('Marked as read', n.title, { duration: 2600 });
+                        load();
+                      } catch (err) {
+                        toast.error('Could not update notification', describeError(err));
+                      }
+                    }}
+                    aria-label="Mark as read"
+                    className="rounded-lg p-1.5 text-emerald-700 transition hover:bg-emerald-50 active:scale-90"
+                  >
                     <Check className="h-5 w-5" />
                   </button>
                 )}
-                <button onClick={() => notificationsAPI.delete(n.id).then(load)} aria-label="Delete notification" className="rounded-lg p-1.5 text-stone-400 hover:bg-stone-100">
+                <button
+                  onClick={async () => {
+                    try {
+                      await notificationsAPI.delete(n.id);
+                      toast.info('Notification deleted', n.title, { duration: 2600 });
+                      load();
+                    } catch (err) {
+                      toast.error('Could not delete notification', describeError(err));
+                    }
+                  }}
+                  aria-label="Delete notification"
+                  className="rounded-lg p-1.5 text-stone-400 transition hover:bg-stone-100 active:scale-90"
+                >
                   <X className="h-4 w-4" />
                 </button>
               </div>
@@ -119,11 +181,15 @@ export function ContributionsPage() {
 export function SubmissionDetailPage({ review = false }) {
   const { id } = useParams();
   const nav = useNavigate();
+  const { toast } = useToast();
+  const confirm = useConfirm();
   const [x, setX] = useState(null);
   const [comments, setComments] = useState('');
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState({});
 
   const load = () => {
     knowledgeAPI.submissionDetail(id).then((r) => setX(r.data)).catch(() => setError('This submission is unavailable.'));
@@ -133,18 +199,77 @@ export function SubmissionDetailPage({ review = false }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
+  const editable = !review && x && ['DRAFT', 'REJECTED', 'REVISION_REQUESTED'].includes(x.status);
+
+  const startEdit = () => {
+    setDraft({
+      traditional_use_description: x.traditional_use_description || '',
+      cultural_context: x.cultural_context || '',
+      plant_part: x.plant_part || '',
+      preparation_method: x.preparation_method || '',
+      supporting_information: x.supporting_information || '',
+      local_name: x.local_name || '',
+      language: x.language || '',
+    });
+    setEditing(true);
+  };
+
+  const saveEdit = async (e) => {
+    e.preventDefault();
+    setBusy(true);
+    setError('');
+    try {
+      await knowledgeAPI.updateSubmission(id, draft);
+      toast.success('Contribution updated', x.status === 'DRAFT'
+        ? 'Your draft was saved.'
+        : 'Saved and resubmitted for expert review.');
+      setEditing(false);
+      load();
+    } catch (err) {
+      const message = describeError(err);
+      setError(message);
+      toast.error('Could not update contribution', message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const submit = async (action) => {
     if (action === 'reject' && !reason.trim()) {
       setError('A rejection reason is required.');
+      toast.warning('Reason required', 'Explain what needs to change before rejecting this submission.');
       return;
     }
+
+    const labels = {
+      approve: ['Submission approved', 'The contribution is now published to the knowledge base.'],
+      reject: ['Submission rejected', 'The contributor has been notified with your reason.'],
+      request_revision: ['Revision requested', 'The contributor has been asked to make corrections.'],
+    };
+
+    const confirmed = await confirm({
+      title: action === 'approve' ? 'Approve and publish?' : action === 'reject' ? 'Reject this submission?' : 'Request corrections?',
+      message: action === 'approve'
+        ? 'The traditional use will become visible to every visitor immediately.'
+        : action === 'reject'
+          ? 'The contributor will see your reason and can submit a new version.'
+          : 'The contributor will be asked to correct and resubmit.',
+      confirmLabel: action === 'reject' ? 'Reject submission' : 'Confirm',
+      tone: action === 'reject' ? 'danger' : 'primary',
+    });
+    if (!confirmed) return;
+
     setBusy(true);
     setError('');
     try {
       await knowledgeAPI.review(id, { action, comments, reason });
+      const [title, message] = labels[action];
+      toast.success(title, message);
       nav('/expert/reviews');
     } catch (e) {
-      setError(e.response?.data?.detail || 'Review could not be saved.');
+      const message = describeError(e);
+      setError(message);
+      toast.error('Review could not be saved', message);
     } finally {
       setBusy(false);
     }
@@ -189,6 +314,42 @@ export function SubmissionDetailPage({ review = false }) {
           {x.review_reason && (
             <p className="text-sm text-red-700"><b>Required corrections:</b><br />{x.review_reason}</p>
           )}
+          {editable && !editing && (
+            <button onClick={startEdit} className={btnPrimary}>
+              <Pencil className="h-4 w-4" /> {x.status === 'DRAFT' ? 'Continue draft' : 'Edit & resubmit'}
+            </button>
+          )}
+
+          {editing && (
+            <form onSubmit={saveEdit} className="space-y-3">
+              <label className="block">
+                <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-stone-500">How it is used *</span>
+                <textarea required value={draft.traditional_use_description} onChange={(e) => setDraft({ ...draft, traditional_use_description: e.target.value })} className={inputCls + ' min-h-28'} />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-stone-500">Local name</span>
+                <input value={draft.local_name || ''} onChange={(e) => setDraft({ ...draft, local_name: e.target.value })} className={inputCls} />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-stone-500">Language</span>
+                <input value={draft.language || ''} onChange={(e) => setDraft({ ...draft, language: e.target.value })} className={inputCls} />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-stone-500">Cultural context</span>
+                <textarea value={draft.cultural_context || ''} onChange={(e) => setDraft({ ...draft, cultural_context: e.target.value })} className={inputCls + ' min-h-20'} />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-stone-500">Supporting information</span>
+                <textarea value={draft.supporting_information || ''} onChange={(e) => setDraft({ ...draft, supporting_information: e.target.value })} className={inputCls + ' min-h-20'} />
+              </label>
+              {error && <p className="text-sm text-red-600">{error}</p>}
+              <div className="flex gap-2">
+                <button type="submit" disabled={busy} className={btnPrimary}>{busy ? 'Saving…' : 'Save changes'}</button>
+                <button type="button" onClick={() => { setEditing(false); setError(''); }} className={btnSecondary}>Cancel</button>
+              </div>
+            </form>
+          )}
+
           {review && (
             <>
               <textarea value={comments} onChange={(e) => setComments(e.target.value)} placeholder="Review comments" className={inputCls + ' min-h-24'} />
@@ -251,18 +412,36 @@ export function RecordManager({ kind }) {
   const [form, setForm] = useState(null);
   const [err, setErr] = useState('');
   const [saving, setSaving] = useState(false);
+  const { toast } = useToast();
+
+  const openEdit = async (x) => {
+    try {
+      const res = await managerApi.detail(x.id);
+      setForm({ ...res.data });
+    } catch {
+      setForm({ ...x });
+      toast.warning('Opened with list data', 'The full record could not be refreshed from the API.');
+    }
+  };
 
   const save = async (e) => {
     e.preventDefault();
     setSaving(true);
     setErr('');
     try {
-      if (form.id) await managerApi.update(form.id, form);
+      const isEdit = Boolean(form.id);
+      if (isEdit) await managerApi.update(form.id, form);
       else await managerApi.create(form);
+      const label = isEdit ? 'Record updated' : 'Record created';
       setForm(null);
+      toast.success(label, isEdit
+        ? 'Your changes were saved to the documented base.'
+        : 'The record is now part of the knowledge base.');
       reload();
-    } catch (e) {
-      setErr(e.response?.data?.detail || 'Please check the required fields and try again.');
+    } catch (err) {
+      const message = describeError(err);
+      setErr(message);
+      toast.error('Could not save record', message);
     } finally {
       setSaving(false);
     }
@@ -358,7 +537,7 @@ export function RecordManager({ kind }) {
                     </div>
                     <p className="mt-1 line-clamp-1 text-sm text-stone-500">{x.source || x.precautions || 'No notes yet'}</p>
                   </div>
-                  <button onClick={() => setForm({ ...x })} className="ml-3 shrink-0 rounded-lg p-2 text-emerald-700 transition hover:bg-emerald-50" aria-label="Edit record">
+                  <button onClick={() => openEdit(x)} className="ml-3 shrink-0 rounded-lg p-2 text-emerald-700 transition hover:bg-emerald-50 active:scale-95" aria-label="Edit record">
                     <ClipboardList className="h-4 w-4" />
                   </button>
                 </div>
@@ -378,6 +557,26 @@ export function AdminUsersPage() {
   const [q, setQ] = useState('');
   const [role, setRole] = useState('');
   const [flash, setFlash] = useState('');
+  const [openId, setOpenId] = useState(null);
+  const [detail, setDetail] = useState(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const { toast } = useToast();
+  const confirm = useConfirm();
+
+  const toggleUser = async (x) => {
+    if (openId === x.id) { setOpenId(null); return; }
+    setOpenId(x.id);
+    setDetailLoading(true);
+    setDetail(null);
+    try {
+      const res = await usersAPI.detail(x.id);
+      setDetail(res.data);
+    } catch (err) {
+      toast.error('Could not load user detail', describeError(err));
+    } finally {
+      setDetailLoading(false);
+    }
+  };
 
   const rows = (data || []).filter((x) => {
     if (role && x.role !== role) return false;
@@ -385,8 +584,41 @@ export function AdminUsersPage() {
     return hay.includes(q.toLowerCase());
   });
 
-  const update = (x, patch) => {
-    usersAPI.update(x.id, patch).then(reload).catch(() => setFlash('Update failed — the API rejected the change.'));
+  const update = async (x, patch, message) => {
+    try {
+      await usersAPI.update(x.id, patch);
+      setFlash('Saved.');
+      toast.success('User updated', message);
+      reload();
+    } catch (err) {
+      setFlash('Update failed.');
+      toast.error('Could not update user', describeError(err));
+    }
+  };
+
+  const changeRole = async (x, nextRole) => {
+    const ok = await confirm({
+      title: `Change ${x.username} to ${nextRole}?`,
+      message: 'The new role takes effect immediately and changes what this person can access.',
+      confirmLabel: 'Change role',
+      tone: nextRole === 'ADMIN' ? 'danger' : 'primary',
+    });
+    if (!ok) return;
+    await update(x, { role: nextRole }, `${x.username} is now ${nextRole}.`);
+  };
+
+  const toggleActive = async (x) => {
+    const next = !x.is_active;
+    const ok = await confirm({
+      title: next ? `Reactivate ${x.username}?` : `Deactivate ${x.username}?`,
+      message: next
+        ? 'This account will be able to sign in again.'
+        : 'This account will be signed out and will not be able to sign in.',
+      confirmLabel: next ? 'Reactivate' : 'Deactivate',
+      tone: next ? 'primary' : 'danger',
+    });
+    if (!ok) return;
+    await update(x, { is_active: next }, `${x.username} was ${next ? 'reactivated' : 'deactivated'}.`);
   };
 
   const counts = (data || []).reduce((acc, x) => {
@@ -444,16 +676,51 @@ export function AdminUsersPage() {
                 {rows.map((x) => (
                   <tr key={x.id} className="transition-colors hover:bg-emerald-50/40">
                     <Td>
-                      <div className="flex items-center gap-3">
+                      <button type="button" onClick={() => toggleUser(x)} className="flex w-full items-center gap-3 text-left">
                         <Avatar name={`${x.first_name || ''} ${x.username}`.trim()} />
                         <div className="min-w-0">
                           <p className="truncate font-semibold text-stone-800">{x.first_name ? `${x.first_name} ${x.last_name || ''}`.trim() : x.username}</p>
                           <p className="truncate text-xs text-stone-500">{x.email}</p>
                         </div>
-                      </div>
+                      </button>
+                      {openId === x.id && (
+                        <div className="animate-fade-in-up mt-3 rounded-xl border border-stone-200 bg-stone-50/70 p-3">
+                          {detailLoading ? (
+                            <div className="space-y-2">
+                              <div className="skeleton-shimmer h-3 w-1/2 rounded" />
+                              <div className="skeleton-shimmer h-3 w-2/3 rounded" />
+                            </div>
+                          ) : (
+                            <dl className="grid grid-cols-2 gap-3 text-sm">
+                              <div>
+                                <dt className="text-xs font-semibold uppercase tracking-wide text-stone-400">Username</dt>
+                                <dd className="text-stone-700">@{detail?.username || x.username}</dd>
+                              </div>
+                              <div>
+                                <dt className="text-xs font-semibold uppercase tracking-wide text-stone-400">Phone</dt>
+                                <dd className="text-stone-700">{detail?.phone || '—'}</dd>
+                              </div>
+                              <div>
+                                <dt className="text-xs font-semibold uppercase tracking-wide text-stone-400">Last login</dt>
+                                <dd className="text-stone-700">{detail?.last_login ? formatDateTime(detail.last_login) : '—'}</dd>
+                              </div>
+                              <div>
+                                <dt className="text-xs font-semibold uppercase tracking-wide text-stone-400">Joined</dt>
+                                <dd className="text-stone-700">{formatDate(detail?.date_joined || x.date_joined)}</dd>
+                              </div>
+                              {detail?.bio && (
+                                <div className="col-span-2">
+                                  <dt className="text-xs font-semibold uppercase tracking-wide text-stone-400">Bio</dt>
+                                  <dd className="text-stone-600">{detail.bio}</dd>
+                                </div>
+                              )}
+                            </dl>
+                          )}
+                        </div>
+                      )}
                     </Td>
                     <Td>
-                      <select value={x.role} onChange={(e) => update(x, { role: e.target.value })} className="rounded-lg border border-stone-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-stone-700 outline-none focus:border-emerald-500">
+                      <select value={x.role} onChange={(e) => changeRole(x, e.target.value)} className="rounded-lg border border-stone-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-stone-700 outline-none transition focus:border-emerald-500">
                         {['USER', 'PRACTITIONER', 'EXPERT', 'ADMIN'].map((v) => <option key={v}>{v}</option>)}
                       </select>
                     </Td>
@@ -462,8 +729,8 @@ export function AdminUsersPage() {
                     <Td>
                       <div className="flex justify-end">
                         <button
-                          onClick={() => update(x, { is_active: !x.is_active })}
-                          className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${x.is_active ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'}`}
+                          onClick={() => toggleActive(x)}
+                          className={`rounded-lg px-3 py-1.5 text-xs font-bold transition active:scale-95 ${x.is_active ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'}`}
                         >
                           {x.is_active ? 'Deactivate' : 'Activate'}
                         </button>
@@ -486,11 +753,44 @@ const RISK_BAR = { LOW: 'bg-emerald-500', MODERATE: 'bg-amber-500', HIGH: 'bg-re
 
 export function PreservationPage() {
   const { data, loading, error, reload } = useList(() => preservationAPI.risk({ page_size: 200 }));
+  const { toast } = useToast();
+  const [recalculating, setRecalculating] = useState(false);
+  const [expanded, setExpanded] = useState(null);
+  const [detail, setDetail] = useState(null);
 
   const counts = (data || []).reduce((acc, r) => {
     acc[r.risk_level] = (acc[r.risk_level] || 0) + 1;
     return acc;
   }, {});
+
+  const recalculate = async () => {
+    setRecalculating(true);
+    try {
+      const res = await preservationAPI.calculate();
+      toast.success('Risk assessment complete', res.data?.detail || 'Documentation risk was recalculated.');
+      reload();
+    } catch (err) {
+      toast.error('Assessment failed', describeError(err));
+    } finally {
+      setRecalculating(false);
+    }
+  };
+
+  const toggleDetail = async (id) => {
+    if (expanded === id) {
+      setExpanded(null);
+      setDetail(null);
+      return;
+    }
+    setExpanded(id);
+    setDetail(null);
+    try {
+      const res = await preservationAPI.riskDetail(id);
+      setDetail(res.data);
+    } catch (err) {
+      toast.error('Could not load assessment detail', describeError(err));
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -499,6 +799,12 @@ export function PreservationPage() {
         title="Preservation analysis"
         description="A documentation-risk indicator derived from contribution activity and geographic concentration — not a prediction of biological extinction."
         icon={AlertTriangle}
+        action={(
+          <button onClick={recalculate} disabled={recalculating} className={btnPrimary}>
+            <RefreshCw className={`h-4 w-4 ${recalculating ? 'animate-spin' : ''}`} />
+            {recalculating ? 'Recalculating…' : 'Recalculate risk'}
+          </button>
+        )}
       />
 
       <div className="grid gap-4 sm:grid-cols-3">
@@ -515,7 +821,7 @@ export function PreservationPage() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
           {data.map((x) => (
-            <div key={x.id} className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+            <div key={x.id} className="animate-rise rounded-2xl border border-stone-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
               <div className="flex items-center justify-between gap-3">
                 <StatusBadge value={x.risk_level} />
                 <span className="text-lg font-bold text-stone-800">{Math.round(x.risk_score ?? 0)}<span className="text-xs font-medium text-stone-400"> / 100</span></span>
@@ -534,8 +840,35 @@ export function PreservationPage() {
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Badge tone="stone">{x.total_contributors ?? 0} contributors</Badge>
                   <Badge tone="stone">{x.total_traditional_uses ?? 0} documented uses</Badge>
+                  {x.days_since_last_contribution != null && (
+                    <Badge tone="stone">{x.days_since_last_contribution} days since last entry</Badge>
+                  )}
                 </div>
               )}
+
+              <button
+                onClick={() => toggleDetail(x.id)}
+                className="mt-4 inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 transition hover:text-emerald-800"
+              >
+                {expanded === x.id ? 'Hide breakdown' : 'View breakdown'}
+                <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-300 ${expanded === x.id ? 'rotate-180' : ''}`} />
+              </button>
+
+              <div className={`grid overflow-hidden transition-all duration-300 ${expanded === x.id ? 'mt-4 max-h-96 opacity-100' : 'max-h-0 opacity-0'}`}>
+                {detail && expanded === x.id && (
+                  <dl className="grid grid-cols-2 gap-3 rounded-xl bg-stone-50 p-4 text-xs">
+                    <ScoreRow label="Contributor scarcity" value={detail.contributor_scarcity_score} />
+                    <ScoreRow label="Knowledge recency" value={detail.knowledge_recency_score} />
+                    <ScoreRow label="Geographic concentration" value={detail.geographic_concentration_score} />
+                    <ScoreRow label="Documentation scarcity" value={detail.documentation_scarcity_score} />
+                    <ScoreRow label="Submission decline" value={detail.submission_decline_score} />
+                    <div>
+                      <dt className="font-semibold uppercase tracking-wide text-stone-400">Regions covered</dt>
+                      <dd className="mt-1 text-stone-700">{detail.unique_regions_count ?? 0}</dd>
+                    </div>
+                  </dl>
+                )}
+              </div>
             </div>
           ))}
         </div>

@@ -1,6 +1,5 @@
 /* Shared admin design system: components + tokens + data hook.
    The kit intentionally co-exports non-component values. */
-/* eslint-disable react-refresh/only-export-components */
 import { useCallback, useEffect, useState } from 'react';
 import { CircleAlert, Inbox, RefreshCw } from 'lucide-react';
 

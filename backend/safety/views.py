@@ -43,6 +43,9 @@ class SafetyCreateView(generics.CreateAPIView):
 
 
 class SafetyUpdateView(generics.UpdateAPIView):
+
+    # The client edits with PATCH; PUT (full replacement) is not offered.
+    http_method_names = ['get', 'head', 'options', 'patch']
     serializer_class = SafetySerializer
     queryset = SafetyInformation.objects.all()
     permission_classes = [IsExpertOrAdmin]

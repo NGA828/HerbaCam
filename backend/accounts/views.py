@@ -33,6 +33,9 @@ class RegisterView(generics.CreateAPIView):
 
 class ProfileView(generics.RetrieveUpdateAPIView):
     """View and update user profile."""
+
+    # The client edits with PATCH; PUT (full replacement) is not offered.
+    http_method_names = ['get', 'head', 'options', 'patch']
     serializer_class = UserProfileSerializer
     permission_classes = [permissions.IsAuthenticated]
 
@@ -92,6 +95,9 @@ class UserListView(generics.ListAPIView):
 
 class UserManageView(generics.RetrieveUpdateAPIView):
     """Admin: manage individual user."""
+
+    # The client edits with PATCH; PUT (full replacement) is not offered.
+    http_method_names = ['get', 'head', 'options', 'patch']
     serializer_class = UserAdminSerializer
     permission_classes = [IsAdministrator]
 

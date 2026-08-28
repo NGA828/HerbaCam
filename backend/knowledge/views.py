@@ -88,6 +88,9 @@ class KnowledgeSubmissionListView(generics.ListAPIView):
 
 class KnowledgeSubmissionDetailView(generics.RetrieveUpdateAPIView):
     """View/update a specific submission."""
+
+    # The client edits with PATCH; PUT (full replacement) is not offered.
+    http_method_names = ['get', 'head', 'options', 'patch']
     serializer_class = KnowledgeSubmissionSerializer
     permission_classes = [permissions.IsAuthenticated]
 

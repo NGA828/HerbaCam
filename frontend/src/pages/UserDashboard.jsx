@@ -4,19 +4,26 @@ import { analyticsAPI, identificationAPI } from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
 import { Leaf, Camera, Heart, ArrowRight, TrendingUp, BarChart3 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
+import { useToast } from '../contexts/ToastContext';
+import { CountUp, Reveal } from '../components/ui/motion';
 import { plantImage } from '../utils/images';
 
 const COLORS = ['#16a34a', '#059669', '#0d9488', '#0891b2', '#2563eb', '#7c3aed'];
 
 export default function UserDashboard() {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [stats, setStats] = useState(null);
   const [recentIds, setRecentIds] = useState([]);
 
   useEffect(() => {
-    analyticsAPI.dashboard().then(r => setStats(r.data)).catch(() => {});
-    identificationAPI.history().then(r => setRecentIds((r.data.results || r.data).slice(0, 5))).catch(() => {});
-  }, []);
+    analyticsAPI.dashboard()
+      .then(r => setStats(r.data))
+      .catch(() => toast.error('Dashboard data unavailable', 'Some statistics could not be loaded.'));
+    identificationAPI.history()
+      .then(r => setRecentIds((r.data.results || r.data).slice(0, 5)))
+      .catch(() => {});
+  }, [toast]);
 
   const pieData = stats ? [
     { name: 'Plants', value: stats.total_plants || 0 },
@@ -27,13 +34,13 @@ export default function UserDashboard() {
   if (!stats) {
     return (
       <div className="space-y-6">
-        <div className="h-48 bg-stone-100 rounded-2xl animate-pulse" />
+        <div className="skeleton-shimmer h-48 rounded-2xl" />
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {[1,2,3,4].map(i => <div key={i} className="h-28 bg-stone-100 rounded-xl animate-pulse" />)}
+          {[1,2,3,4].map(i => <div key={i} className="skeleton-shimmer h-28 rounded-xl" />)}
         </div>
         <div className="grid lg:grid-cols-3 gap-6">
-          <div className="h-72 bg-stone-100 rounded-xl animate-pulse" />
-          <div className="lg:col-span-2 h-72 bg-stone-100 rounded-xl animate-pulse" />
+          <div className="skeleton-shimmer h-72 rounded-xl" />
+          <div className="lg:col-span-2 skeleton-shimmer h-72 rounded-xl" />
         </div>
       </div>
     );
@@ -67,17 +74,19 @@ export default function UserDashboard() {
           { icon: Heart, label: 'My Favorites', value: stats?.my_favorites || 0, bgColor: 'bg-red-50', iconColor: 'text-red-600', ringColor: 'ring-red-100' },
           { icon: TrendingUp, label: 'Traditional Uses', value: stats?.total_traditional_uses || 0, bgColor: 'bg-amber-50', iconColor: 'text-amber-600', ringColor: 'ring-amber-100' },
         ].map((stat, i) => (
-          <div key={i} className="bg-white rounded-xl p-5 border border-stone-200 hover:shadow-md transition-shadow">
-            <div className="flex items-center gap-3">
-              <div className={`w-11 h-11 rounded-xl ${stat.bgColor} ring-1 ${stat.ringColor} flex items-center justify-center`}>
-                <stat.icon className={`w-5 h-5 ${stat.iconColor}`} />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-stone-800">{stat.value}</p>
-                <p className="text-xs text-stone-500">{stat.label}</p>
+          <Reveal key={stat.label} delay={i * 70}>
+            <div className="rounded-xl border border-stone-200 bg-white p-5 transition hover:-translate-y-0.5 hover:shadow-md">
+              <div className="flex items-center gap-3">
+                <div className={`w-11 h-11 rounded-xl ${stat.bgColor} ring-1 ${stat.ringColor} flex items-center justify-center`}>
+                  <stat.icon className={`w-5 h-5 ${stat.iconColor}`} />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-stone-800"><CountUp value={stat.value} /></p>
+                  <p className="text-xs text-stone-500">{stat.label}</p>
+                </div>
               </div>
             </div>
-          </div>
+          </Reveal>
         ))}
       </div>
 
@@ -127,8 +136,8 @@ export default function UserDashboard() {
             </div>
           ) : (
             <div className="space-y-3">
-              {recentIds.map(id => (
-                <div key={id.id} className="flex items-center gap-3 p-3 rounded-lg hover:bg-stone-50 transition-colors">
+              {recentIds.map((id, index) => (
+                <div key={id.id} style={{ animationDelay: `${index * 60}ms` }} className="animate-rise flex items-center gap-3 rounded-lg p-3 transition-colors hover:bg-stone-50">
                   <div className="w-14 h-14 bg-stone-100 rounded-xl overflow-hidden shrink-0 shadow-sm border border-stone-200">
                     <img src={plantImage(id.image)} alt="Identification" className="w-full h-full object-cover transition-transform hover:scale-110" />
                   </div>

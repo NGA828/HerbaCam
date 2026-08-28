@@ -174,8 +174,11 @@ REST_FRAMEWORK = {
         'rest_framework.throttling.UserRateThrottle',
     ],
     'DEFAULT_THROTTLE_RATES': {
-        'anon': '100/hour',
-        'user': '1000/hour',
+        # The public catalogue issues several calls per page (plants,
+        # symptoms, regions, articles…), so the anonymous budget is generous
+        # enough to browse the whole app without being throttled.
+        'anon': '1000/hour',
+        'user': '5000/hour',
         'ai_identification': '30/hour',
     },
 }

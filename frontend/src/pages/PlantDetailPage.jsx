@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { plantsAPI, knowledgeAPI, evidenceAPI, safetyAPI, analyticsAPI } from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../contexts/ToastContext';
+import { Reveal } from '../components/ui/motion';
 import { plantImage, withImageFallback } from '../utils/images';
 import { Heart, MapPin, AlertTriangle, Shield, BookOpen, ArrowLeft, CheckCircle } from 'lucide-react';
 
@@ -13,6 +15,8 @@ export default function PlantDetailPage() {
   const [evidence, setEvidence] = useState([]);
   const [safety, setSafety] = useState([]);
   const [isFavorite, setIsFavorite] = useState(false);
+  const [heartPop, setHeartPop] = useState(false);
+  const { toast } = useToast();
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -34,13 +38,25 @@ export default function PlantDetailPage() {
   }, [id, user]);
 
   const toggleFavorite = async () => {
-    if (!user) return;
-    if (isFavorite) {
-      await analyticsAPI.removeFavorite(parseInt(id));
-      setIsFavorite(false);
-    } else {
-      await analyticsAPI.addFavorite(parseInt(id));
-      setIsFavorite(true);
+    if (!user) {
+      toast.info('Sign in to save favorites', 'Create a free account to keep a personal plant list.');
+      return;
+    }
+    const wasFavorite = isFavorite;
+    setIsFavorite(!wasFavorite); // optimistic
+    setHeartPop(true);
+    setTimeout(() => setHeartPop(false), 450);
+    try {
+      if (wasFavorite) {
+        await analyticsAPI.removeFavorite(parseInt(id));
+        toast.success('Removed from favorites', `${plant.common_name || plant.scientific_name} is no longer saved.`);
+      } else {
+        await analyticsAPI.addFavorite(parseInt(id));
+        toast.success('Saved to favorites', `${plant.common_name || plant.scientific_name} was added to your list.`);
+      }
+    } catch {
+      setIsFavorite(wasFavorite); // roll back
+      toast.error('Could not update favorites', 'Please try again in a moment.');
     }
   };
 
@@ -78,9 +94,13 @@ export default function PlantDetailPage() {
               onError={withImageFallback(plant)}
             />
             {user && (
-              <button onClick={toggleFavorite}
-                className={`absolute top-4 right-4 p-3 rounded-full bg-white/90 backdrop-blur-sm shadow-md transition-all ${isFavorite ? 'text-red-500' : 'text-stone-400 hover:text-red-400'}`}>
-                <Heart className={`w-5 h-5 ${isFavorite ? 'fill-current' : ''}`} />
+              <button
+                onClick={toggleFavorite}
+                aria-pressed={isFavorite}
+                aria-label={isFavorite ? 'Remove from favorites' : 'Save to favorites'}
+                className={`absolute top-4 right-4 p-3 rounded-full bg-white/90 backdrop-blur-sm shadow-md transition-all duration-200 hover:scale-110 active:scale-95 ${isFavorite ? 'text-red-500' : 'text-stone-400 hover:text-red-400'}`}
+              >
+                <Heart className={`w-5 h-5 ${isFavorite ? 'fill-current' : ''} ${heartPop ? 'animate-heart-pop' : ''}`} />
               </button>
             )}
           </div>
@@ -127,8 +147,9 @@ export default function PlantDetailPage() {
             </p>
           ) : (
             <div className="space-y-4">
-              {uses.map(use => (
-                <div key={use.id} className="bg-white rounded-xl p-5 border border-stone-200">
+              {uses.map((use, i) => (
+                <Reveal key={use.id} delay={Math.min(i * 60, 300)}>
+                <div className="bg-white rounded-xl p-5 border border-stone-200 transition hover:shadow-md">
                   <div className="flex items-start justify-between gap-4">
                     <h3 className="font-semibold text-stone-800">{use.symptom_name}</h3>
                     {use.is_verified && (
@@ -152,6 +173,7 @@ export default function PlantDetailPage() {
                     Traditionally associated with this symptom. This is not medical advice.
                   </p>
                 </div>
+                </Reveal>
               ))}
             </div>
           )}
