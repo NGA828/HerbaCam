@@ -1,5 +1,5 @@
 """
-Django settings for HerbaCam project.
+Django settings for Ancestor project.
 """
 import os
 import re

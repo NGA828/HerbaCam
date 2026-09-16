@@ -151,7 +151,7 @@ export function ToastProvider({ children, max = 4 }) {
           ? 'Too many requests'
           : 'Request failed';
     const message = !error?.response
-      ? 'The HerbaCam API is unreachable. Check that the backend is running.'
+      ? 'The Ancestor API is unreachable. Check that the backend is running.'
       : status >= 500
         ? `The server could not complete this request (HTTP ${status}).`
         : status === 429

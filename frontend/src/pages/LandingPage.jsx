@@ -192,7 +192,7 @@ export default function LandingPage() {
           <ScrollReveal>
             <div className="text-center mb-16">
               <span className="text-sm font-medium text-green-600 uppercase tracking-wider">Our Process</span>
-              <h2 className="text-3xl sm:text-4xl font-bold text-stone-800 mt-2 mb-4">How HerbaCam Works</h2>
+              <h2 className="text-3xl sm:text-4xl font-bold text-stone-800 mt-2 mb-4">How Ancestor Works</h2>
               <p className="text-stone-500 max-w-2xl mx-auto">From plant identification to knowledge preservation — explore our intelligent platform.</p>
             </div>
           </ScrollReveal>
@@ -299,7 +299,7 @@ export default function LandingPage() {
                 </h2>
                 <p className="text-stone-600 leading-relaxed mb-6">
                   Every year, traditional healers pass away taking decades of medicinal plant knowledge with them.
-                  HerbaCam's risk assessment system helps identify which knowledge areas need urgent documentation.
+                  Ancestor's risk assessment system helps identify which knowledge areas need urgent documentation.
                 </p>
                 <div className="space-y-4">
                   {[
@@ -487,7 +487,7 @@ export default function LandingPage() {
               Ready to Explore Traditional Plant Knowledge?
             </h2>
             <p className="text-green-100/80 mb-8 max-w-2xl mx-auto text-lg">
-              Join HerbaCam to identify plants with AI, explore traditional medicine, and help preserve knowledge for future generations.
+              Join Ancestor to identify plants with AI, explore traditional medicine, and help preserve knowledge for future generations.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Link to="/register"

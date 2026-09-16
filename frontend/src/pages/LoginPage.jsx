@@ -20,7 +20,7 @@ export default function LoginPage() {
       const user = await login(form);
       toast.success(
         `Welcome back, ${user.first_name || user.username}`,
-        'You are signed in to HerbaCam.',
+        'You are signed in to Ancestor.',
       );
       navigate(user.role === 'ADMIN' ? '/admin/dashboard' : user.role === 'EXPERT' ? '/expert/dashboard' : user.role === 'PRACTITIONER' ? '/practitioner/dashboard' : '/dashboard');
     } catch (err) {
@@ -41,7 +41,7 @@ export default function LoginPage() {
               <Leaf className="w-7 h-7 text-green-600" />
             </div>
             <h1 className="text-2xl font-bold text-stone-800">Welcome Back</h1>
-            <p className="text-stone-500 mt-1">Sign in to your HerbaCam account</p>
+            <p className="text-stone-500 mt-1">Sign in to your Ancestor account</p>
           </div>
 
           {error && (

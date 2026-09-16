@@ -1,5 +1,5 @@
 /**
- * Utility functions for HerbaCam frontend.
+ * Utility functions for Ancestor frontend.
  */
 
 /**

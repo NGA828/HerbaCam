@@ -137,7 +137,7 @@ export default function DashboardLayout() {
           <div className="w-8 h-8 bg-gradient-to-br from-green-600 to-emerald-700 rounded-lg flex items-center justify-center shadow-sm">
             <Leaf className="w-5 h-5 text-white" />
           </div>
-          <span className="font-bold text-lg text-green-800">HerbaCam</span>
+          <span className="font-bold text-lg text-green-800">Ancestor</span>
           <button className="ml-auto lg:hidden p-1 rounded hover:bg-stone-100" onClick={() => setSidebarOpen(false)}>
             <X className="w-5 h-5" />
           </button>

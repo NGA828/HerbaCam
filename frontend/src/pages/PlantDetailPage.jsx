@@ -247,7 +247,7 @@ export default function PlantDetailPage() {
         {/* Disclaimer */}
         <div className="bg-stone-100 rounded-xl p-6 text-center">
           <p className="text-sm text-stone-600">
-            <strong>Disclaimer:</strong> HerbaCam is an educational platform. This information does not constitute medical advice.
+            <strong>Disclaimer:</strong> Ancestor is an educational platform. This information does not constitute medical advice.
             Always consult qualified healthcare professionals before using any plant for medicinal purposes.
           </p>
         </div>

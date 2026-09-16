@@ -8,7 +8,7 @@ export default function AboutPage() {
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         <Reveal>
         <div className="text-center mb-12 pt-8">
-          <h1 className="text-4xl font-bold text-stone-800 mb-4">About HerbaCam</h1>
+          <h1 className="text-4xl font-bold text-stone-800 mb-4">About Ancestor</h1>
           <p className="text-lg text-stone-500 max-w-2xl mx-auto">
             An AI-powered platform for identifying, documenting, and preserving Cameroonian traditional medicinal plant knowledge.
           </p>
@@ -24,7 +24,7 @@ export default function AboutPage() {
             <p className="text-stone-600 leading-relaxed">
               Cameroon is home to extraordinary biodiversity and a deep tradition of medicinal plant knowledge.
               However, as communities modernize, much of this traditional knowledge risks being lost forever.
-              HerbaCam bridges the gap between traditional wisdom and modern technology, using AI to help identify
+              Ancestor bridges the gap between traditional wisdom and modern technology, using AI to help identify
               plants while creating a digital archive of traditional medicinal knowledge.
             </p>
           </section>
@@ -76,7 +76,7 @@ export default function AboutPage() {
           <section className="bg-amber-50 rounded-2xl p-8 border border-amber-200">
             <h2 className="text-xl font-bold text-amber-800 mb-3">⚠ Important Disclaimer</h2>
             <p className="text-amber-700 leading-relaxed">
-              HerbaCam is an educational and informational platform. It is NOT a replacement for professional medical
+              Ancestor is an educational and informational platform. It is NOT a replacement for professional medical
               diagnosis or treatment. Traditional knowledge is presented as documented cultural information, not as
               scientifically proven medical treatments. Always consult qualified healthcare professionals for medical
               decisions. AI identification is probabilistic and should not be considered absolute certainty.

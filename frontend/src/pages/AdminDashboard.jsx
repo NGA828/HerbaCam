@@ -42,7 +42,7 @@ export default function AdminDashboard() {
         <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/4" />
         <div className="relative">
           <h2 className="text-2xl font-bold mb-2">Administration Dashboard</h2>
-          <p className="text-stone-300">Manage the HerbaCam platform and monitor system health.</p>
+          <p className="text-stone-300">Manage the Ancestor platform and monitor system health.</p>
         </div>
       </div>
 

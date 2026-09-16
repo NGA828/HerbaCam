@@ -11,7 +11,7 @@ export default function Footer() {
               <div className="w-9 h-9 bg-green-600 rounded-xl flex items-center justify-center">
                 <Leaf className="w-5 h-5 text-white" />
               </div>
-              <span className="text-xl font-bold text-white">HerbaCam</span>
+              <span className="text-xl font-bold text-white">Ancestor</span>
             </Link>
             <p className="text-sm text-stone-400 leading-relaxed">
               AI-Powered Identification and Preservation of Cameroonian Traditional Medicinal Plant Knowledge.
@@ -31,7 +31,7 @@ export default function Footer() {
           <div>
             <h3 className="font-semibold text-white mb-4">About</h3>
             <ul className="space-y-2 text-sm">
-              <li><Link to="/about" className="hover:text-green-400 transition-colors">About HerbaCam</Link></li>
+              <li><Link to="/about" className="hover:text-green-400 transition-colors">About Ancestor</Link></li>
               <li><Link to="/about" className="hover:text-green-400 transition-colors">Our Mission</Link></li>
               <li><Link to="/about" className="hover:text-green-400 transition-colors">Knowledge Preservation</Link></li>
               <li><Link to="/about" className="hover:text-green-400 transition-colors">Contact</Link></li>
@@ -41,14 +41,14 @@ export default function Footer() {
           <div>
             <h3 className="font-semibold text-white mb-4">Disclaimer</h3>
             <p className="text-xs text-stone-400 leading-relaxed">
-              HerbaCam is an educational and informational platform. It is NOT a replacement for professional medical diagnosis or treatment. Always consult qualified healthcare providers for medical decisions.
+              Ancestor is an educational and informational platform. It is NOT a replacement for professional medical diagnosis or treatment. Always consult qualified healthcare providers for medical decisions.
             </p>
           </div>
         </div>
 
         <div className="border-t border-stone-800 mt-12 pt-8 flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-sm text-stone-500">
-            © {new Date().getFullYear()} HerbaCam. Educational Platform for Traditional Medicinal Plant Knowledge.
+            © {new Date().getFullYear()} Ancestor. Educational Platform for Traditional Medicinal Plant Knowledge.
           </p>
           <p className="text-sm text-stone-500 flex items-center gap-1">
             Made with <Heart className="w-3 h-3 text-red-400" /> for Cameroon

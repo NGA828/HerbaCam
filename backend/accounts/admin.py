@@ -8,5 +8,5 @@ class UserAdmin(BaseUserAdmin):
     list_display = ['username', 'email', 'first_name', 'last_name', 'role', 'is_active']
     list_filter = ['role', 'is_active', 'is_staff']
     fieldsets = BaseUserAdmin.fieldsets + (
-        ('HerbaCam', {'fields': ('role', 'bio', 'phone', 'avatar')}),
+        ('Ancestor', {'fields': ('role', 'bio', 'phone', 'avatar')}),
     )

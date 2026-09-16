@@ -1,4 +1,4 @@
-"""URL configuration for HerbaCam."""
+"""URL configuration for Ancestor."""
 from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
@@ -12,7 +12,7 @@ from rest_framework.response import Response
 @permission_classes([AllowAny])
 def api_root(request):
     return Response({
-        'name': 'HerbaCam API',
+        'name': 'Ancestor API',
         'description': 'AI-Powered Web Application for Identification, Recommendation, and Preservation of Cameroonian Traditional Medicinal Plant Knowledge',
         'version': '1.0.0',
         'endpoints': {

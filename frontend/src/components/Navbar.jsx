@@ -37,7 +37,7 @@ export default function Navbar() {
             <div className="w-9 h-9 bg-gradient-to-br from-green-600 to-emerald-700 rounded-xl flex items-center justify-center shadow-sm group-hover:shadow-md transition-shadow">
               <Leaf className="w-5 h-5 text-white" />
             </div>
-            <span className="text-xl font-bold text-green-800">HerbaCam</span>
+            <span className="text-xl font-bold text-green-800">Ancestor</span>
           </Link>
 
           {/* Desktop Nav */}
@@ -71,7 +71,7 @@ export default function Navbar() {
                 <button
                   onClick={() => {
                     logout();
-                    toast.success('Signed out', 'You have been logged out of HerbaCam.');
+                    toast.success('Signed out', 'You have been logged out of Ancestor.');
                   }}
                   className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-stone-500 transition hover:bg-stone-100 hover:text-stone-800 active:scale-95"
                 >
@@ -119,7 +119,7 @@ export default function Navbar() {
                 Dashboard
               </Link>
               <button
-                onClick={() => { logout(); toast.success('Signed out', 'You have been logged out of HerbaCam.'); }}
+                onClick={() => { logout(); toast.success('Signed out', 'You have been logged out of Ancestor.'); }}
                 className="block w-full rounded-lg px-4 py-2.5 text-left text-sm font-medium text-stone-600 transition hover:bg-stone-100"
               >
                 Log out

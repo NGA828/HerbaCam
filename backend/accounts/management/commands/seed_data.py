@@ -1,5 +1,5 @@
 """
-Seed database with demo data for HerbaCam development.
+Seed database with demo data for Ancestor development.
 
 The dataset is deliberately large enough to exercise every screen of the
 application: public discovery, AI identification history, the practitioner
@@ -700,7 +700,7 @@ class Command(BaseCommand):
                     'genus': data['genus'],
                     'description': data['description'],
                     'habitat': data['habitat'],
-                    'image_credit': 'HerbaCam demo artwork — generated illustration, not a photograph',
+                    'image_credit': 'Ancestor demo artwork — generated illustration, not a photograph',
                     'is_published': True,
                 },
             )
@@ -984,7 +984,7 @@ class Command(BaseCommand):
                     'community': Community.objects.filter(region=region).first() if region else None,
                     'cultural_context': context,
                     'is_verified': is_verified,
-                    'source': f'Documented by {contributor.get_full_name() or contributor.username} (HerbaCam demo dataset)',
+                    'source': f'Documented by {contributor.get_full_name() or contributor.username} (Ancestor demo dataset)',
                     'contributor': contributor,
                     'verified_by': RANDOM.choice(experts) if is_verified else None,
                 },
@@ -1238,8 +1238,8 @@ class Command(BaseCommand):
                     'Knowledge of this kind is transmitted orally, usually within families. When a knowledge holder dies '
                     'without transmitting, specific recipes disappear — not the plant, but the knowledge of what to do '
                     'with it. Writing it down does not replace the healer; it creates a record that communities can keep.\n\n'
-                    '## How HerbaCam handles it\n\n'
-                    'HerbaCam separates three layers: what a community traditionally does, what a practitioner submits, '
+                    '## How Ancestor handles it\n\n'
+                    'Ancestor separates three layers: what a community traditionally does, what a practitioner submits, '
                     'and what an expert has verified. Keeping them apart lets readers see exactly how well a claim is '
                     'substantiated.\n\n'
                     '*This article is sample content for demonstration purposes.*'
@@ -1302,7 +1302,7 @@ class Command(BaseCommand):
                     '## Two different losses\n\n'
                     'Conservation biology tends to count species. But in traditional medicine the scarce resource is often '
                     'the know-how: which part to harvest, at what season, with what preparation, and at what dose. '
-                    'HerbaCam tracks this as a documentation risk score, built from contributor numbers, the recency of '
+                    'Ancestor tracks this as a documentation risk score, built from contributor numbers, the recency of '
                     'contributions and the geographic spread of what is recorded.\n\n'
                     '## What a high score means\n\n'
                     'A high documentation-risk score does not mean a plant is endangered. It means that what is known '
@@ -1344,7 +1344,7 @@ class Command(BaseCommand):
                 'category': 'safety-and-evidence',
                 'summary': 'What risk levels, pregnancy warnings, and dosage concerns actually tell you.',
                 'content': (
-                    'Every plant page in HerbaCam carries a safety record when one has been documented. Here is how to '
+                    'Every plant page in Ancestor carries a safety record when one has been documented. Here is how to '
                     'read it.\n\n'
                     '## Risk level\n\n'
                     'Risk level describes how cautiously the material must be handled, not how toxic it is in the '
@@ -1398,7 +1398,7 @@ class Command(BaseCommand):
                     'than a full ring, rotate trees, and leave young trees alone. These rules are social as much as '
                     'technical — enforced by community norms, not by inspectors.\n\n'
                     '## Why it belongs in the record\n\n'
-                    'When HerbaCam records a bark use, the harvesting context is part of the knowledge. A remedy that '
+                    'When Ancestor records a bark use, the harvesting context is part of the knowledge. A remedy that '
                     'destroys its own source is not knowledge that can be passed on.\n\n'
                     '*This article is sample content for demonstration purposes.*'
                 ),
@@ -1452,7 +1452,7 @@ class Command(BaseCommand):
                 'category': 'traditional-medicine',
                 'summary': 'Why a submission passes through draft, review, and publication instead of going straight online.',
                 'content': (
-                    'A practitioner submission on HerbaCam is not published the moment it is submitted. It moves through '
+                    'A practitioner submission on Ancestor is not published the moment it is submitted. It moves through '
                     'a workflow designed to protect both contributors and readers.\n\n'
                     '## The stages\n\n'
                     'A contributor can save a **draft** while gathering information. **Submitted** records wait for an '
@@ -1678,7 +1678,7 @@ class Command(BaseCommand):
                 'traditional_use_description': description,
                 'cultural_context': context,
                 'community_name': community.name if community else (community_label or ''),
-                'supporting_information': 'Submitted through the HerbaCam practitioner portal (demo dataset).',
+                'supporting_information': 'Submitted through the Ancestor practitioner portal (demo dataset).',
             }
 
             lookup = {
@@ -1873,7 +1873,7 @@ class Command(BaseCommand):
                 self._stamp(notification, 'created_at', identification.created_at + timedelta(minutes=2))
 
         system_messages = [
-            ('Welcome to HerbaCam', 'Thanks for joining. Start by browsing the plant library or trying an identification.'),
+            ('Welcome to Ancestor', 'Thanks for joining. Start by browsing the plant library or trying an identification.'),
             ('New articles published', 'Three new articles about preparation methods and safety are now available.'),
             ('Knowledge base updated', 'Newly verified traditional uses were published this week.'),
             ('Reminder: document local names', 'Adding the language of a local name helps experts verify submissions faster.'),
@@ -1981,7 +1981,7 @@ class Command(BaseCommand):
     def _settings(self, users):
         admin = users['admin']
         defaults = {
-            'application': {'name': 'HerbaCam', 'support_email': 'support@herbacam.org', 'language': 'en'},
+            'application': {'name': 'Ancestor', 'support_email': 'support@herbacam.org', 'language': 'en'},
             'registration': {'enabled': True, 'require_email': True, 'default_role': 'USER'},
             'notifications': {'email': True, 'in_app': True, 'digest': 'weekly'},
             'content': {'moderation': True, 'require_review': True, 'public_plants': True},

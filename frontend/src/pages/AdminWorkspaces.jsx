@@ -604,7 +604,7 @@ export function AuditLogs() {
 /* 5 · Settings ---------------------------------------------------------------- */
 
 const SETTINGS_DEFAULTS = {
-  application: { name: 'HerbaCam', support_email: 'support@herbacam.org' },
+  application: { name: 'Ancestor', support_email: 'support@herbacam.org' },
   registration: { enabled: true, require_email: true },
   notifications: { email: true, in_app: true },
   content: { moderation: true, ai_assist: true },

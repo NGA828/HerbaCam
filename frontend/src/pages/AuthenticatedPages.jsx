@@ -450,7 +450,7 @@ export function RecordManager({ kind }) {
   const title = kind === 'evidence' ? 'Scientific evidence' : 'Safety information';
   const description = kind === 'evidence'
     ? 'Evidence levels describe the available research; they do not automatically validate traditional claims.'
-    : 'Safety records are human-reviewed; HerbaCam never invents medical safety guidance.';
+    : 'Safety records are human-reviewed; Ancestor never invents medical safety guidance.';
 
   const set = (key, val) => setForm((f) => ({ ...f, [key]: val }));
 

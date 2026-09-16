@@ -20,7 +20,7 @@ class ArticleListSerializer(serializers.ModelSerializer):
     def get_author_name(self, obj):
         if obj.author:
             return obj.author.get_full_name() or obj.author.username
-        return 'HerbaCam Team'
+        return 'Ancestor Team'
 
 
 class ArticleDetailSerializer(serializers.ModelSerializer):
@@ -36,7 +36,7 @@ class ArticleDetailSerializer(serializers.ModelSerializer):
     def get_author_name(self, obj):
         if obj.author:
             return obj.author.get_full_name() or obj.author.username
-        return 'HerbaCam Team'
+        return 'Ancestor Team'
 
 
 class ArticleAdminSerializer(serializers.ModelSerializer):
@@ -56,4 +56,4 @@ class ArticleAdminSerializer(serializers.ModelSerializer):
     def get_author_name(self, obj):
         if obj.author:
             return obj.author.get_full_name() or obj.author.username
-        return 'HerbaCam Team'
+        return 'Ancestor Team'

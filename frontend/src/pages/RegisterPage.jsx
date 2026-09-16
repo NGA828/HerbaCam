@@ -26,7 +26,7 @@ export default function RegisterPage() {
     setLoading(true);
     try {
       const user = await register(form);
-      toast.success('Account created', `Welcome to HerbaCam, ${user.first_name || user.username}!`);
+      toast.success('Account created', `Welcome to Ancestor, ${user.first_name || user.username}!`);
       navigate(user.role === 'PRACTITIONER' ? '/practitioner/dashboard' : '/dashboard');
     } catch (err) {
       const data = err.response?.data;
@@ -50,7 +50,7 @@ export default function RegisterPage() {
               <Leaf className="w-7 h-7 text-green-600" />
             </div>
             <h1 className="text-2xl font-bold text-stone-800">Create Account</h1>
-            <p className="text-stone-500 mt-1">Join HerbaCam to explore plant knowledge</p>
+            <p className="text-stone-500 mt-1">Join Ancestor to explore plant knowledge</p>
           </div>
 
           {error && (

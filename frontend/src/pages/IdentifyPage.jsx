@@ -80,7 +80,7 @@ export default function IdentifyPage() {
     setLoading(true);
     setError('');
     setResult(null);
-    const pending = toast.loading('Analysing your image…', 'The vision model is comparing it with the HerbaCam library.');
+    const pending = toast.loading('Analysing your image…', 'The vision model is comparing it with the Ancestor library.');
     try {
       const formData = new FormData();
       formData.append('image', file);
