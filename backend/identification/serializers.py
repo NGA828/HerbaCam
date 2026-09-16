@@ -10,11 +10,18 @@ class IdentificationResultSerializer(serializers.ModelSerializer):
 
 class IdentificationSerializer(serializers.ModelSerializer):
     results = IdentificationResultSerializer(many=True, read_only=True)
+    analysis = serializers.SerializerMethodField()
 
     class Meta:
         model = Identification
-        fields = ['id', 'image', 'status', 'results', 'created_at']
+        fields = ['id', 'image', 'status', 'results', 'analysis', 'created_at']
         read_only_fields = ['status', 'created_at']
+
+    def get_analysis(self, obj):
+        primary = obj.results.filter(is_primary=True).first()
+        if primary and primary.ai_raw_response:
+            return primary.ai_raw_response.get('analysis', {})
+        return {}
 
 
 class IdentificationListSerializer(serializers.ModelSerializer):

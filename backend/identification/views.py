@@ -61,16 +61,20 @@ class PlantIdentifyView(APIView):
             identification.status = Identification.Status.FAILED
             identification.save()
             logger.warning(f"AI identification failed for user {request.user.username}: {ai_result.get('error')}")
+            response_status = (
+                status.HTTP_400_BAD_REQUEST
+                if ai_result.get('invalid_image')
+                else status.HTTP_503_SERVICE_UNAVAILABLE
+            )
             return Response({
                 'identification': IdentificationSerializer(identification).data,
                 'error': ai_result.get('error', 'Identification failed.'),
-            }, status=status.HTTP_200_OK)
+            }, status=response_status)
 
         # Store results
         data = ai_result['data']
         db_match = ai_result.get('database_match', {})
         mode = ai_result.get('mode', 'live')
-        demo_notice = ai_result.get('demo_notice', '')
 
         # Primary identification
         plant_obj = None
@@ -87,7 +91,7 @@ class PlantIdentifyView(APIView):
             common_name=data['identification'].get('common_name', ''),
             confidence=data['identification']['confidence'],
             is_primary=True,
-            ai_raw_response={**data, 'mode': mode, 'demo_notice': demo_notice},
+            ai_raw_response={**data, 'mode': mode},
         )
 
         # Alternative identifications
@@ -115,8 +119,7 @@ class PlantIdentifyView(APIView):
         # Build response with metadata
         response_data = IdentificationSerializer(identification).data
         response_data['mode'] = mode
-        if demo_notice:
-            response_data['demo_notice'] = demo_notice
+        response_data['analysis'] = data.get('analysis', {})
         if db_match and not db_match.get('found'):
             response_data['database_notice'] = db_match.get('message', '')
 

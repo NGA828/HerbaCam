@@ -1985,7 +1985,7 @@ class Command(BaseCommand):
             'registration': {'enabled': True, 'require_email': True, 'default_role': 'USER'},
             'notifications': {'email': True, 'in_app': True, 'digest': 'weekly'},
             'content': {'moderation': True, 'require_review': True, 'public_plants': True},
-            'ai': {'enabled': True, 'model': 'google/gemini-2.0-flash-exp:free', 'max_upload_mb': 10},
+            'ai': {'enabled': True, 'model': 'google/gemini-3.8-flash', 'max_upload_mb': 10},
         }
         for key, value in defaults.items():
             SystemSetting.objects.update_or_create(

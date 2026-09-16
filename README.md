@@ -43,6 +43,8 @@ cp .env.example .env
 2. Install dependencies and run the database:
 ```bash
 cd backend
+python -m venv venv
+venv\Scripts\activate.bat
 pip install -r requirements.txt
 python manage.py migrate
 python manage.py seed_data --clear   # Load demo data + copy plant images into backend/media/
@@ -118,7 +120,7 @@ DB_HOST=127.0.0.1
 DB_PORT=3306
 # DATABASE_URL=mysql://root:your-mysql-password@127.0.0.1:3306/herbacam
 OPENROUTER_API_KEY=your-openrouter-key
-OPENROUTER_MODEL=google/gemini-2.0-flash-exp:free
+OPENROUTER_MODEL=google/gemini-3.8-flash
 ```
 
 ### Frontend (.env)

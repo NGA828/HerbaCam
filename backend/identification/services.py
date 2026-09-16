@@ -4,13 +4,12 @@ AI Plant Identification Service using OpenRouter API.
 Architecture: React → Django → OpenRouter
 The AI never directly accesses the database. Django acts as the intermediary.
 
-When OPENROUTER_API_KEY is not configured, the service operates in DEMO MODE,
-simulating AI identification using the local plant database for demonstration purposes.
+OpenRouter is required for identification. The service never substitutes a
+database lookup for an AI response.
 """
 import base64
 import json
 import logging
-import random
 import requests
 from django.conf import settings
 from plants.models import Plant
@@ -20,7 +19,10 @@ logger = logging.getLogger(__name__)
 IDENTIFICATION_PROMPT = """You are a botanical expert specializing in plant identification, 
 with particular expertise in African and Cameroonian flora.
 
-Analyze the provided plant image and identify the plant species.
+First determine whether the image contains a real plant specimen or a visible
+plant part (leaf, flower, fruit, seed, bark, stem, or whole plant). Only if it
+does, identify the plant species. Do not identify screenshots, drawings,
+packaging, furniture, buildings, people, animals, or other objects as plants.
 
 Return your response as a valid JSON object with this exact structure:
 {
@@ -41,6 +43,13 @@ Return your response as a valid JSON object with this exact structure:
         "leaf_type": "Description of leaves",
         "flower_type": "Description of flowers if visible",
         "growth_form": "Tree/Shrub/Herb/Vine/etc."
+    },
+    "analysis": {
+        "visual_observations": ["Visible observation 1"],
+        "traditional_context": "Documented or commonly reported traditional context, or state that it is unknown",
+        "potential_uses": ["Potentially relevant use, clearly labelled as traditional if not scientifically established"],
+        "safety_notes": ["Important safety or toxicity concern, or state that verification is needed"],
+        "next_steps": ["A practical observation or verification step"]
     }
 }
 
@@ -51,12 +60,22 @@ Important rules:
 - If you cannot identify the plant with any confidence, set confidence to 0.0
 - Focus on species found in Cameroon and Central Africa when possible
 - Be honest about uncertainty - do not guess with high confidence
+- Do not diagnose illness, prescribe treatment, recommend dosage, or claim that a plant is safe to consume
+- Separate traditional knowledge from scientific evidence and label uncertainty explicitly
+- If the image is not a plant, identify it as "N/A" with confidence 0.0 and explain why
+- The image must contain a visible plant or plant part; do not infer a plant from context alone
+- Keep each analysis list to a maximum of 3 concise items
 """
 
 
 def encode_image_to_base64(image_file):
     """Encode an uploaded image file to base64."""
+    # Django may have consumed the upload stream while saving the
+    # Identification record. Always encode from the beginning.
+    image_file.seek(0)
     image_data = image_file.read()
+    if not image_data:
+        raise ValueError("Uploaded image is empty.")
     return base64.b64encode(image_data).decode('utf-8')
 
 
@@ -64,20 +83,27 @@ def identify_plant(image_file):
     """
     Send plant image to OpenRouter for AI identification.
     
-    If OPENROUTER_API_KEY is not configured, uses demo mode which
-    simulates AI identification from the local plant database.
-    
     Returns:
         dict: Structured identification result or error info
     """
-    api_key = settings.OPENROUTER_API_KEY
+    api_key = settings.OPENROUTER_API_KEY.strip()
     
-    if not api_key:
-        logger.info("OpenRouter API key not configured — using DEMO MODE")
-        return _demo_identification(image_file)
+    if not api_key or api_key == 'your-openrouter-key':
+        logger.error("OpenRouter API key is not configured")
+        return {
+            'success': False,
+            'error': 'Live plant identification is not configured. Add OPENROUTER_API_KEY to backend/.env and restart the backend.',
+        }
 
     # Encode image
-    image_base64 = encode_image_to_base64(image_file)
+    try:
+        image_base64 = encode_image_to_base64(image_file)
+    except (OSError, ValueError) as e:
+        logger.error("Could not read uploaded image: %s", e)
+        return {
+            'success': False,
+            'error': 'The uploaded image could not be read. Please choose the image again and retry.',
+        }
     
     # Determine content type
     content_type = getattr(image_file, 'content_type', 'image/jpeg')
@@ -120,6 +146,12 @@ def identify_plant(image_file):
         parsed = parse_ai_response(content)
         
         if parsed:
+            if not is_plant_identification(parsed):
+                return {
+                    'success': False,
+                    'invalid_image': True,
+                    'error': 'This image does not appear to show a plant. Please upload a clear photo of a leaf, flower, fruit, bark, or the whole plant.',
+                }
             # Try to match with database
             db_match = match_plant_in_database(parsed)
             return {
@@ -141,14 +173,37 @@ def identify_plant(image_file):
             'error': 'Plant identification is taking too long. Please try again.',
         }
     except requests.exceptions.HTTPError as e:
-        logger.error(f"OpenRouter API HTTP error: {e}")
-        # If auth fails, fall back to demo mode
-        if e.response is not None and e.response.status_code in (401, 403):
-            logger.warning("OpenRouter API authentication failed — falling back to DEMO MODE")
-            return _demo_identification(image_file)
+        response = e.response
+        status_code = response.status_code if response is not None else None
+        provider_error = _openrouter_error_message(response)
+        logger.error(
+            "OpenRouter API HTTP error (%s): %s",
+            status_code,
+            provider_error or str(e),
+        )
+        if status_code in (401, 403):
+            return {
+                'success': False,
+                'error': 'OpenRouter rejected the API key. Check OPENROUTER_API_KEY in backend/.env and try again.',
+            }
+        if status_code == 404:
+            return {
+                'success': False,
+                'error': f'OpenRouter could not find model "{settings.OPENROUTER_MODEL}". Update OPENROUTER_MODEL in backend/.env.',
+            }
+        if status_code == 429:
+            return {
+                'success': False,
+                'error': 'OpenRouter rate limit or account quota reached. Please check your OpenRouter account and try again later.',
+            }
+        if status_code is not None and status_code >= 500:
+            return {
+                'success': False,
+                'error': 'OpenRouter is temporarily unavailable. Please try again in a moment.',
+            }
         return {
             'success': False,
-            'error': 'Plant identification service returned an error. Please try again later.',
+            'error': f'OpenRouter rejected the request: {provider_error or "unknown provider error"}.',
         }
     except requests.exceptions.RequestException as e:
         logger.error(f"OpenRouter API error: {e}")
@@ -164,81 +219,18 @@ def identify_plant(image_file):
         }
 
 
-def _demo_identification(image_file):
-    """
-    Demo mode: simulate AI identification by selecting a plant from the database.
-    
-    This allows the identification feature to be demonstrated and tested
-    without requiring a live OpenRouter API key.
-    
-    Uses image hash to deterministically select a plant (same image → same result),
-    making it feel realistic rather than purely random.
-    """
-    published_plants = list(Plant.objects.filter(is_published=True))
-    
-    if not published_plants:
-        return {
-            'success': False,
-            'error': 'No plants in database for demo identification.',
-        }
-    
-    # Use image size as a pseudo-random seed for deterministic results
+def _openrouter_error_message(response):
+    """Extract a safe, useful provider error without exposing response headers."""
+    if response is None:
+        return ''
     try:
-        image_file.seek(0, 2)  # Seek to end
-        file_size = image_file.tell()
-        image_file.seek(0)  # Reset to beginning
-        random.seed(file_size)
-    except Exception:
-        file_size = 0
-    
-    # Select primary plant
-    primary_plant = random.choice(published_plants)
-    
-    # Generate confidence based on "image quality" simulation
-    confidence = round(random.uniform(0.65, 0.95), 2)
-    
-    # Select alternatives (different from primary)
-    alternatives_pool = [p for p in published_plants if p.id != primary_plant.id]
-    num_alternatives = min(2, len(alternatives_pool))
-    alt_plants = random.sample(alternatives_pool, num_alternatives) if alternatives_pool else []
-    
-    # Distribute remaining confidence among alternatives
-    remaining_conf = round((1.0 - confidence) * 0.8, 2)
-    alternatives = []
-    for i, alt in enumerate(alt_plants):
-        alt_conf = round(remaining_conf / (i + 2), 2)
-        alternatives.append({
-            'scientific_name': alt.scientific_name,
-            'common_name': alt.common_name,
-            'confidence': alt_conf,
-        })
-    
-    parsed = {
-        'identification': {
-            'scientific_name': primary_plant.scientific_name,
-            'common_name': primary_plant.common_name,
-            'confidence': confidence,
-            'description': primary_plant.description or f'A {primary_plant.common_name or primary_plant.scientific_name} specimen.',
-        },
-        'alternatives': alternatives,
-        'plant_features': {
-            'leaf_type': 'See detailed description in plant profile',
-            'flower_type': 'See detailed description in plant profile',
-            'growth_form': primary_plant.habitat or 'Various',
-        },
-        'demo_mode': True,
-    }
-    
-    db_match = match_plant_in_database(parsed)
-    
-    return {
-        'success': True,
-        'data': parsed,
-        'database_match': db_match,
-        'mode': 'demo',
-        'demo_notice': 'This identification was generated in demo mode (no AI API key configured). '
-                       'In production, this would use real AI vision analysis via OpenRouter.',
-    }
+        payload = response.json()
+        error = payload.get('error', {})
+        if isinstance(error, dict):
+            return str(error.get('message') or error.get('code') or '').strip()
+        return str(error).strip()
+    except (ValueError, TypeError):
+        return response.text[:300].strip()
 
 
 def parse_ai_response(content):
@@ -269,6 +261,13 @@ def parse_ai_response(content):
         # Validate alternatives
         if 'alternatives' not in parsed:
             parsed['alternatives'] = []
+        if 'analysis' not in parsed or not isinstance(parsed['analysis'], dict):
+            parsed['analysis'] = {}
+        analysis = parsed['analysis']
+        for field in ('visual_observations', 'potential_uses', 'safety_notes', 'next_steps'):
+            if not isinstance(analysis.get(field), list):
+                analysis[field] = []
+        analysis.setdefault('traditional_context', 'Traditional context could not be verified from the image alone.')
         
         for alt in parsed['alternatives']:
             alt_conf = float(alt.get('confidence', 0))
@@ -279,6 +278,41 @@ def parse_ai_response(content):
     except (json.JSONDecodeError, ValueError, TypeError) as e:
         logger.error(f"Failed to parse AI response: {e}")
         return None
+
+
+def is_plant_identification(ai_result):
+    """Reject model responses that explicitly identify a non-plant image."""
+    identification = ai_result.get('identification', {})
+    scientific_name = str(identification.get('scientific_name', '')).strip().lower()
+    common_name = str(identification.get('common_name', '')).strip().lower()
+    description = str(identification.get('description', '')).strip().lower()
+
+    non_plant_names = {
+        'n/a',
+        'na',
+        'unknown',
+        'not a plant',
+        'no plant detected',
+        'unidentified object',
+    }
+    non_plant_phrases = (
+        'not a plant',
+        'no plant',
+        'no botanical',
+        'screenshot',
+        'user interface',
+        'animal',
+        'person',
+        'vehicle',
+        'building',
+    )
+
+    if scientific_name in non_plant_names or common_name in non_plant_names:
+        return False
+    return not any(
+        phrase in f'{scientific_name} {common_name} {description}'
+        for phrase in non_plant_phrases
+    )
 
 
 def match_plant_in_database(ai_result):

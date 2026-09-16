@@ -608,7 +608,7 @@ const SETTINGS_DEFAULTS = {
   registration: { enabled: true, require_email: true },
   notifications: { email: true, in_app: true },
   content: { moderation: true, ai_assist: true },
-  ai: { enabled: true, model: 'google/gemini-2.0-flash-exp:free' },
+  ai: { enabled: true, model: 'google/gemini-3.8-flash' },
 };
 
 export function SettingsPage() {

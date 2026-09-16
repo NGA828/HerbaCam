@@ -395,7 +395,7 @@ SECRET_KEY=your-secret-key
 DEBUG=True
 DB_ENGINE=sqlite3
 OPENROUTER_API_KEY=your-openrouter-key
-OPENROUTER_MODEL=google/gemini-2.0-flash-exp:free
+OPENROUTER_MODEL=google/gemini-3.8-flash
 ```
 
 **Frontend (.env):**

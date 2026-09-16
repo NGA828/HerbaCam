@@ -7,7 +7,7 @@ import { useConfirm } from '../components/ui/ConfirmDialog';
 import { Reveal } from '../components/ui/motion';
 import {
   Camera, Upload, X, AlertCircle, Leaf, AlertTriangle, ArrowRight, Image, Info,
-  Brain, FlaskConical, Flag, Loader2,
+  Brain, Flag, Loader2,
 } from 'lucide-react';
 
 export default function IdentifyPage() {
@@ -149,7 +149,6 @@ export default function IdentifyPage() {
     return 'bg-red-500';
   };
 
-  const isDemo = result?.mode === 'demo';
 
   return (
     <div className="pt-20 pb-12 min-h-screen">
@@ -260,38 +259,42 @@ export default function IdentifyPage() {
             {result && result.results ? (
               <div className="space-y-4 animate-fade-in-up">
                 {/* Mode indicator */}
-                <div className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium ${
-                  isDemo ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-green-50 text-green-700 border border-green-200'
-                }`}>
-                  {isDemo ? (
-                    <>
-                      <FlaskConical className="w-4 h-4" />
-                      <span>Demo Mode — Using simulated AI identification</span>
-                    </>
-                  ) : (
-                    <>
-                      <Brain className="w-4 h-4" />
-                      <span>Live AI Analysis — Powered by OpenRouter</span>
-                    </>
-                  )}
+                <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium bg-green-50 text-green-700 border border-green-200">
+                  <Brain className="w-4 h-4" />
+                  <span>Live AI Analysis — Powered by OpenRouter</span>
                 </div>
-
-                {/* Demo notice */}
-                {result.demo_notice && (
-                  <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800">
-                    <p className="font-medium mb-1">⚗️ Demo Mode Notice</p>
-                    <p>{result.demo_notice}</p>
-                    <p className="mt-2 text-xs text-amber-600">
-                      To enable live AI: Set <code className="bg-amber-100 px-1 rounded">OPENROUTER_API_KEY</code> in your <code className="bg-amber-100 px-1 rounded">.env</code> file.
-                    </p>
-                  </div>
-                )}
 
                 {/* Database not found notice */}
                 {result.database_notice && (
                   <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl text-sm text-blue-800">
                     <p className="font-medium mb-1">📚 Knowledge Unavailable</p>
                     <p>{result.database_notice}</p>
+                  </div>
+                )}
+
+                {result.analysis && (
+                  <div className="bg-white rounded-2xl p-6 border border-blue-200 shadow-sm">
+                    <p className="text-xs text-blue-700 font-semibold mb-4 uppercase tracking-wider flex items-center gap-1.5">
+                      <Info className="w-3.5 h-3.5" /> Botanical Analysis
+                    </p>
+                    {result.analysis.visual_observations?.length > 0 && (
+                      <AnalysisList title="Visual observations" items={result.analysis.visual_observations} />
+                    )}
+                    {result.analysis.traditional_context && (
+                      <div className="mb-4">
+                        <p className="text-sm font-semibold text-stone-700">Traditional context</p>
+                        <p className="mt-1 text-sm text-stone-600">{result.analysis.traditional_context}</p>
+                      </div>
+                    )}
+                    {result.analysis.potential_uses?.length > 0 && (
+                      <AnalysisList title="Potential uses" items={result.analysis.potential_uses} />
+                    )}
+                    {result.analysis.safety_notes?.length > 0 && (
+                      <AnalysisList title="Safety notes" items={result.analysis.safety_notes} tone="amber" />
+                    )}
+                    {result.analysis.next_steps?.length > 0 && (
+                      <AnalysisList title="Recommended verification" items={result.analysis.next_steps} />
+                    )}
                   </div>
                 )}
 
@@ -384,6 +387,23 @@ export default function IdentifyPage() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function AnalysisList({ title, items, tone = 'blue' }) {
+  const bulletClass = tone === 'amber' ? 'bg-amber-500' : 'bg-blue-500';
+  return (
+    <div className="mb-4 last:mb-0">
+      <p className="text-sm font-semibold text-stone-700">{title}</p>
+      <ul className="mt-1 space-y-1">
+        {items.map((item, index) => (
+          <li key={`${title}-${index}`} className="flex gap-2 text-sm text-stone-600">
+            <span className={`mt-2 h-1.5 w-1.5 shrink-0 rounded-full ${bulletClass}`} />
+            <span>{item}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
