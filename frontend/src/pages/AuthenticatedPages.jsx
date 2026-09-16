@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useToast, describeError } from '../contexts/ToastContext';
 import { useConfirm } from '../components/ui/ConfirmDialog';
 import {
-  AlertTriangle, Bell, Check, ChevronDown, ClipboardCheck, ClipboardList, FileText,
+  AlertTriangle, Bell, Check, ChevronDown, ClipboardCheck, FileText,
   Leaf, MapPin, Pencil, Plus, RefreshCw, ScrollText, Search, Shield, ShieldCheck,
   UserRound, X,
 } from 'lucide-react';
@@ -412,6 +412,8 @@ export function RecordManager({ kind }) {
   const [form, setForm] = useState(null);
   const [err, setErr] = useState('');
   const [saving, setSaving] = useState(false);
+  const [query, setQuery] = useState('');
+  const [levelFilter, setLevelFilter] = useState('');
   const { toast } = useToast();
 
   const openEdit = async (x) => {
@@ -453,6 +455,20 @@ export function RecordManager({ kind }) {
     : 'Safety records are human-reviewed; Ancestor never invents medical safety guidance.';
 
   const set = (key, val) => setForm((f) => ({ ...f, [key]: val }));
+  const filteredData = (data || []).filter((x) => {
+    const matchesLevel = !levelFilter || x.level === levelFilter;
+    const haystack = `${x.plant_name || ''} ${x.source || ''} ${x.summary || ''}`.toLowerCase();
+    return matchesLevel && haystack.includes(query.toLowerCase());
+  });
+  const levelCounts = ['STRONG', 'MODERATE', 'PRELIMINARY', 'INSUFFICIENT']
+    .map((level) => ({ level, count: (data || []).filter((x) => x.level === level).length }));
+  const levelTone = { STRONG: 'emerald', MODERATE: 'sky', PRELIMINARY: 'amber', INSUFFICIENT: 'stone' };
+  const levelDescription = {
+    STRONG: 'Consistent, well-supported findings',
+    MODERATE: 'Useful findings with some limitations',
+    PRELIMINARY: 'Early or limited research',
+    INSUFFICIENT: 'Not enough evidence to draw a conclusion',
+  };
 
   return (
     <div className="space-y-6">
@@ -469,6 +485,26 @@ export function RecordManager({ kind }) {
         <Skeleton rows={5} />
       ) : (
         <>
+          {kind === 'evidence' && (
+            <section className="space-y-4">
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <KpiCard icon={ScrollText} label="Documented sources" value={data.length} hint="Across the knowledge base" tone="violet" />
+                {levelCounts.map(({ level, count }) => (
+                  <KpiCard key={level} icon={level === 'STRONG' ? ShieldCheck : ClipboardCheck} label={level.replace('_', ' ').toLowerCase()} value={count} hint={levelDescription[level]} tone={levelTone[level]} />
+                ))}
+              </div>
+              <div className="flex flex-col gap-3 rounded-2xl border border-stone-200 bg-white p-4 shadow-sm sm:flex-row">
+                <label className="relative min-w-0 flex-1">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
+                  <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search plants, sources, or summaries…" className={inputCls + ' pl-9'} />
+                </label>
+                <select value={levelFilter} onChange={(e) => setLevelFilter(e.target.value)} className={selectCls + ' sm:w-52'}>
+                  <option value="">All evidence levels</option>
+                  {['STRONG', 'MODERATE', 'PRELIMINARY', 'INSUFFICIENT'].map((level) => <option key={level} value={level}>{level.replace('_', ' ')}</option>)}
+                </select>
+              </div>
+            </section>
+          )}
           {form && (
             <section className="rounded-2xl border border-emerald-200/70 bg-emerald-50/50 p-5 shadow-sm">
               <form onSubmit={save} className="grid gap-4 md:grid-cols-2">
@@ -526,21 +562,27 @@ export function RecordManager({ kind }) {
 
           {!data.length ? (
             <EmptyState icon={kind === 'evidence' ? ShieldCheck : Shield} title={`No ${title.toLowerCase()} records yet.`} hint="Add the first record to start building the documented base." />
+          ) : !filteredData.length ? (
+            <EmptyState icon={Search} title="No matching evidence records." hint="Try a different plant, source, or evidence level." />
           ) : (
-            <div className="grid gap-3">
-              {data.map((x) => (
-                <div key={x.id} className="flex items-center justify-between rounded-2xl border border-stone-200 bg-white p-4 shadow-sm transition hover:bg-emerald-50/30">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <b className="text-stone-800">{x.plant_name}</b>
-                      <StatusBadge value={kind === 'evidence' ? x.level : x.risk_level} />
+            <div className="grid gap-3 lg:grid-cols-2">
+              {filteredData.map((x) => (
+                <article key={x.id} className="group rounded-2xl border border-stone-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-200 hover:shadow-md">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold uppercase tracking-[0.14em] text-emerald-700">{x.plant_name || 'Unassigned plant'}</p>
+                      <h3 className="mt-1 font-semibold text-stone-800">{kind === 'evidence' ? x.source : x.risk_level}</h3>
                     </div>
-                    <p className="mt-1 line-clamp-1 text-sm text-stone-500">{x.source || x.precautions || 'No notes yet'}</p>
+                    <div className="flex items-center gap-2">
+                      <StatusBadge value={kind === 'evidence' ? x.level : x.risk_level} />
+                      <button onClick={() => openEdit(x)} className="rounded-lg p-2 text-stone-400 transition hover:bg-emerald-50 hover:text-emerald-700" aria-label="Edit record">
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                    </div>
                   </div>
-                  <button onClick={() => openEdit(x)} className="ml-3 shrink-0 rounded-lg p-2 text-emerald-700 transition hover:bg-emerald-50 active:scale-95" aria-label="Edit record">
-                    <ClipboardList className="h-4 w-4" />
-                  </button>
-                </div>
+                  <p className="mt-4 line-clamp-3 text-sm leading-relaxed text-stone-600">{x.summary || x.precautions || 'No summary has been added yet.'}</p>
+                  {kind === 'evidence' && <div className="mt-4 border-t border-stone-100 pt-3 text-xs text-stone-400">{x.level ? levelDescription[x.level] : 'Evidence level not set'}</div>}
+                </article>
               ))}
             </div>
           )}
