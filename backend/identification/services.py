@@ -8,8 +8,10 @@ OpenRouter is required for identification. The service never substitutes a
 database lookup for an AI response.
 """
 import base64
+import ast
 import json
 import logging
+import re
 import requests
 from django.conf import settings
 from plants.models import Plant
@@ -56,9 +58,17 @@ Return your response as a valid JSON object with this exact structure:
 Important rules:
 - Confidence should be between 0.0 and 1.0
 - Provide the most likely identification first
+- Always provide the widely used common name when one exists. Do not leave
+  common_name blank for a recognizable species. If no reliable common name
+  exists, use an empty string rather than inventing one.
+- Provide common_name for every alternative when a reliable name exists.
 - Include up to 3 alternative identifications if uncertain
 - If you cannot identify the plant with any confidence, set confidence to 0.0
-- Focus on species found in Cameroon and Central Africa when possible
+- Identify the plant shown in the image regardless of whether it is known in
+  the Ancestor database. The database is only used after your response to add
+  local knowledge; it must never replace, alter, or constrain your identification.
+- Consider species from Cameroon and Central Africa when the visual evidence supports it,
+  but do not force a Cameroon species when the image supports another species.
 - Be honest about uncertainty - do not guess with high confidence
 - Do not diagnose illness, prescribe treatment, recommend dosage, or claim that a plant is safe to consume
 - Separate traditional knowledge from scientific evidence and label uncertainty explicitly
@@ -117,6 +127,7 @@ def identify_plant(image_file):
     
     payload = {
         "model": settings.OPENROUTER_MODEL,
+        "response_format": {"type": "json_object"},
         "messages": [
             {
                 "role": "user",
@@ -154,6 +165,12 @@ def identify_plant(image_file):
                 }
             # Try to match with database
             db_match = match_plant_in_database(parsed)
+            if (
+                db_match.get('found')
+                and not parsed['identification'].get('common_name')
+                and db_match.get('common_name')
+            ):
+                parsed['identification']['common_name'] = db_match['common_name']
             return {
                 'success': True,
                 'data': parsed,
@@ -236,30 +253,54 @@ def _openrouter_error_message(response):
 def parse_ai_response(content):
     """Parse AI response content into structured data."""
     try:
-        # Try to extract JSON from the response
-        # The AI might wrap it in markdown code blocks
         cleaned = content.strip()
         if cleaned.startswith('```'):
-            # Remove code block markers
-            lines = cleaned.split('\n')
-            cleaned = '\n'.join(lines[1:-1])
-        
-        parsed = json.loads(cleaned)
+            lines = cleaned.splitlines()
+            cleaned = '\n'.join(lines[1:-1]).strip()
+
+        # Models occasionally add a short explanation around the JSON.
+        start = cleaned.find('{')
+        end = cleaned.rfind('}')
+        if start < 0 or end <= start:
+            raise json.JSONDecodeError('No JSON object found', cleaned, 0)
+        cleaned = cleaned[start:end + 1]
+
+        try:
+            parsed = json.loads(cleaned)
+        except json.JSONDecodeError:
+            # Recover only common JSON formatting mistakes; never invent fields
+            # or values. The model is still rejected if the repaired object is
+            # not valid JSON or lacks the required identification fields.
+            repaired = re.sub(
+                r'([{\[,]\s*)([A-Za-z_][A-Za-z0-9_]*)\s*:',
+                r'\1"\2":',
+                cleaned,
+            )
+            repaired = re.sub(r',(\s*[}\]])', r'\1', repaired)
+            try:
+                parsed = json.loads(repaired)
+            except json.JSONDecodeError:
+                # Some models emit a Python-style dictionary with single
+                # quoted strings. literal_eval keeps this fallback safe.
+                parsed = ast.literal_eval(cleaned)
         
         # Validate required fields
-        if 'identification' not in parsed:
+        if not isinstance(parsed, dict) or 'identification' not in parsed:
             return None
         
         ident = parsed['identification']
-        if 'scientific_name' not in ident or 'confidence' not in ident:
+        if not isinstance(ident, dict) or 'scientific_name' not in ident or 'confidence' not in ident:
             return None
+        ident.setdefault('common_name', '')
+        if ident['common_name'] is None:
+            ident['common_name'] = ''
         
         # Ensure confidence is a float between 0 and 1
         confidence = float(ident.get('confidence', 0))
         ident['confidence'] = max(0.0, min(1.0, confidence))
         
         # Validate alternatives
-        if 'alternatives' not in parsed:
+        if not isinstance(parsed.get('alternatives'), list):
             parsed['alternatives'] = []
         if 'analysis' not in parsed or not isinstance(parsed['analysis'], dict):
             parsed['analysis'] = {}
@@ -270,6 +311,11 @@ def parse_ai_response(content):
         analysis.setdefault('traditional_context', 'Traditional context could not be verified from the image alone.')
         
         for alt in parsed['alternatives']:
+            if not isinstance(alt, dict):
+                continue
+            alt.setdefault('common_name', '')
+            if alt['common_name'] is None:
+                alt['common_name'] = ''
             alt_conf = float(alt.get('confidence', 0))
             alt['confidence'] = max(0.0, min(1.0, alt_conf))
         
@@ -339,24 +385,6 @@ def match_plant_in_database(ai_result):
     except Plant.DoesNotExist:
         pass
     
-    # Try partial match on genus
-    try:
-        genus = scientific_name.split()[0]
-        plant = Plant.objects.filter(
-            scientific_name__icontains=genus,
-            is_published=True
-        ).first()
-        if plant:
-            return {
-                'id': plant.id,
-                'scientific_name': plant.scientific_name,
-                'common_name': plant.common_name,
-                'found': True,
-                'partial_match': True,
-            }
-    except (IndexError, AttributeError):
-        pass
-    
     # Try common name match
     if common_name:
         try:
@@ -372,5 +400,9 @@ def match_plant_in_database(ai_result):
     
     return {
         'found': False,
-        'message': f'Cameroon-specific knowledge for "{scientific_name}" is currently unavailable in our database.',
+        'message': (
+            f'The AI identified "{scientific_name}", but this species is not yet '
+            'in the Ancestor knowledge database. The identification is still based '
+            'on the uploaded image.'
+        ),
     }
