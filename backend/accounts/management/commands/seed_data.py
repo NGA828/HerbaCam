@@ -92,9 +92,9 @@ PLANT_IMAGE_CREDITS = {
     'Alstonia boonei': 'Reference photo of Alstonia boonei (stool wood)',
     'Ocimum gratissimum': 'Reference photo of Ocimum gratissimum (African basil)',
     'Rauvolfia vomitoria': 'Reference photo of Rauvolfia vomitoria',
-    'Zingiber officinale': 'Reference photo of Zingiber officinale (ginger)',
+    'Zingiber officinale': 'Reference photo of Zingiber officinale (ginger) rhizome with shoots',
     'Curcuma longa': 'Reference photo of Curcuma longa (turmeric) — toptropicals.com',
-    'Allium sativum': 'Reference photo of Allium sativum (garlic) — dearplants.com',
+    'Allium sativum': 'Reference photo of Allium sativum (garlic) bulbs',
     'Aloe vera': 'Reference photo of Aloe vera',
     'Carica papaya': 'Reference photo of Carica papaya (papaya) — britannica.com',
     'Mangifera indica': 'Reference photo of Mangifera indica (mango)',
@@ -103,7 +103,7 @@ PLANT_IMAGE_CREDITS = {
     'Khaya senegalensis': 'Reference photo of Khaya senegalensis (African mahogany)',
     'Nauclea latifolia': 'Reference photo of Nauclea latifolia (African peach) — toptropicals.com',
     'Piper guineense': 'Reference photo of Piper guineense (Ashanti pepper) — nmppdb.com.ng',
-    'Tetrapleura tetraptera': 'Reference photo of Tetrapleura tetraptera (prekese) fruit',
+    'Tetrapleura tetraptera': 'Reference photo of Tetrapleura tetraptera (prekese) pod on tree — toptropicals.com',
     'Xylopia aethiopica': 'Reference photo of Xylopia aethiopica (Ethiopian pepper) — globalfoodbook.com',
     'Garcinia kola': 'Reference photo of Garcinia kola (bitter kola) fruit — datelinehealthafrica.org',
     'Picralima nitida': 'Reference photo of Picralima nitida (akuamma) fruit — electricveg.com',
@@ -114,7 +114,7 @@ PLANT_IMAGE_CREDITS = {
     'Ageratum conyzoides': 'Reference photo of Ageratum conyzoides flowers',
     'Chromolaena odorata': 'Reference photo of Chromolaena odorata — J. B. Friday, flickr.com',
     'Securidaca longipedunculata': 'Reference photo of Securidaca longipedunculata — pza.sanbi.org',
-    'Anogeissus leiocarpa': 'Reference photo of Anogeissus leiocarpa — pfaf.org',
+    'Anogeissus leiocarpa': 'Reference photo of Anogeissus leiocarpa foliage and flower heads — West African Plants photo guide',
     'Zanthoxylum gilletii': 'Reference photo of Zanthoxylum gilletii — plantuse.plantnet.org (PROTA)',
 }
 
@@ -1038,6 +1038,696 @@ class Command(BaseCommand):
          'Bark decoction taken for gastric ulcers.', ''),
     ]
 
+    # Plants whose preparations are potent enough that the demo dataset
+    # records NO self-medication dose — practitioner supervision only.
+    HIGH_RISK_PLANTS = {
+        'Rauvolfia vomitoria',
+        'Picralima nitida',
+        'Voacanga africana',
+        'Securidaca longipedunculata',
+    }
+
+    # Default traditionally reported dosage per preparation family.
+    # (dosage, frequency, duration, administration)
+    DOSAGE_BY_PREP = {
+        'DECOCTION': (
+            '1 small teacup (~150 ml) of the cooled decoction',
+            'Twice daily (morning and evening)',
+            'For up to 3 days; seek care if symptoms persist',
+            'Drink warm after food. Prepare fresh each day.',
+        ),
+        'INFUSION': (
+            '1 teacup (~150 ml) of the strained infusion',
+            '2-3 times daily',
+            'For up to 5 days',
+            'Steep a handful of material in 1 litre of boiled water for 10-15 minutes, strain and drink warm.',
+        ),
+        'POULTICE': (
+            'Enough crushed material to cover the area',
+            'Once or twice daily',
+            'Until the skin clears; seek care if it worsens after 3 days',
+            'Apply to clean skin and cover lightly. Wash hands before and after.',
+        ),
+        'POWDER': (
+            '1 level teaspoon stirred in water or porridge',
+            'Once daily',
+            'For up to 7 days',
+            'Take with food and plenty of water.',
+        ),
+        'JUICE': (
+            '2 tablespoons (~30 ml) diluted in half a glass of water',
+            'Once daily in the morning',
+            'For up to 3 days',
+            'Drink after a light meal. Stop if nausea or stomach pain occurs.',
+        ),
+        'OINTMENT': (
+            'A thin layer on the affected area',
+            'Twice daily',
+            'Until healed',
+            'External use only. Do not apply to deep or infected wounds.',
+        ),
+        'TINCTURE': (
+            'A few drops in water, as prepared by the practitioner',
+            'As directed by the practitioner',
+            'Short courses only',
+            'Take after food. Not for children or during pregnancy.',
+        ),
+        'SMOKE': (
+            'A few minutes of inhalation',
+            'Once daily',
+            'Single sessions only',
+            'Inhale briefly in open air. Stop if dizzy or nauseous.',
+        ),
+        'BATH': (
+            '1 basin of the prepared water',
+            'Once daily',
+            'For 2-3 days',
+            'Bathe or sponge the body with lukewarm water. Supervise children.',
+        ),
+        'RAW': (
+            'A small traditional portion',
+            'As traditionally taken',
+            'Occasional use',
+            'Chew well. Stop if any discomfort occurs.',
+        ),
+        'OTHER': (
+            'As prepared by the practitioner',
+            'As directed by the practitioner',
+            'As directed by the practitioner',
+            'Follow the practitioner’s instructions exactly.',
+        ),
+    }
+
+    # Specific traditionally reported dosages for well-known uses.
+    # Keyed by (plant, symptom). Everything else falls back to DOSAGE_BY_PREP.
+    # All entries are DEMO data illustrating the dosage feature.
+    DOSAGE_OVERRIDES = {
+        ('Azadirachta indica', 'Malaria'): (
+            '1 teacup (~150 ml) of leaf decoction',
+            'Twice daily',
+            'For 3 days',
+            'Drink after food. Seek clinic testing and treatment for malaria — traditional tea does not replace it.',
+        ),
+        ('Azadirachta indica', 'Fever'): (
+            'Half a teacup (~75 ml) of bark decoction',
+            'Twice daily',
+            'For 2 days',
+            'Drink after food. Seek care if fever exceeds 39C or lasts more than 2 days.',
+        ),
+        ('Azadirachta indica', 'Skin rash'): (
+            'Paste from a handful of crushed leaves',
+            'Once daily',
+            'Until the rash clears (max 7 days)',
+            'Apply to clean skin and rinse after 30 minutes.',
+        ),
+        ('Azadirachta indica', 'Intestinal worms'): (
+            'Half a teaspoon of seed powder in pap',
+            'Once daily in the morning',
+            'Single dose; repeat after 7 days only if advised',
+            'Take with food. Seeds are strong — keep the amount small.',
+        ),
+        ('Azadirachta indica', 'Toothache'): (
+            '1 fresh twig',
+            'As needed',
+            'Single use per twig',
+            'Chew one end into fibres and brush the teeth. Do not swallow the fibres.',
+        ),
+        ('Moringa oleifera', 'Fatigue'): (
+            '1 teacup (~150 ml) of leaf infusion',
+            'Once daily in the morning',
+            'For 1-2 weeks',
+            'Drink as a strengthening tea with breakfast.',
+        ),
+        ('Moringa oleifera', 'Anaemia'): (
+            '1 tablespoon of leaf powder in porridge',
+            'Once daily',
+            'For 2-4 weeks alongside normal meals',
+            'Stir into food. Continue clinic follow-up for anaemia.',
+        ),
+        ('Moringa oleifera', 'Diabetes'): (
+            '1 teacup of unsweetened leaf infusion',
+            'Once daily before breakfast',
+            'Ongoing household use',
+            'Take before meals. Keep prescribed medication and monitor blood sugar.',
+        ),
+        ('Moringa oleifera', 'Hypertension'): (
+            '1 teacup of unsweetened leaf infusion',
+            'Once daily in the morning',
+            'Ongoing household use',
+            'Take before food. Keep prescribed medication and check blood pressure.',
+        ),
+        ('Prunus africana', 'Prostate complaints'): (
+            '1 small teacup (~150 ml) of bark decoction',
+            'Once daily',
+            'For 7 days, then review',
+            'Drink after food. Urinary difficulty in older men needs clinic review.',
+        ),
+        ('Prunus africana', 'Rheumatism'): (
+            'Half a teaspoon of bark powder with food',
+            'Twice daily',
+            'For up to 7 days',
+            'Take with a full meal and water.',
+        ),
+        ('Prunus africana', 'Stomach ache'): (
+            'Half a teacup (~75 ml) of bark decoction',
+            'Twice daily',
+            'For 2 days',
+            'Drink after food. Seek care for severe or bloody pain.',
+        ),
+        ('Vernonia amygdalina', 'Malaria'): (
+            '2 tablespoons of leaf juice diluted in water',
+            'Once daily in the morning',
+            'For 3 days',
+            'Dilute in half a glass of water and take after a light meal. Confirm malaria with a test.',
+        ),
+        ('Vernonia amygdalina', 'Diabetes'): (
+            '1 teacup of leaf infusion',
+            'Once daily before meals',
+            'Ongoing household use',
+            'Take before eating. Keep prescribed medication.',
+        ),
+        ('Vernonia amygdalina', 'Stomach ache'): (
+            'Half a teacup of leaf decoction',
+            'Twice daily',
+            'For 2 days',
+            'Drink after food.',
+        ),
+        ('Vernonia amygdalina', 'Loss of appetite'): (
+            '1 tablespoon of diluted leaf juice',
+            'Once daily before lunch',
+            'For 3 days',
+            'Dilute well; the bitterness can cause nausea on an empty stomach.',
+        ),
+        ('Vernonia amygdalina', 'Intestinal worms'): (
+            '2 tablespoons of diluted leaf juice',
+            'Once daily in the morning',
+            'Single dose; repeat after a week only if advised',
+            'Take after a light meal.',
+        ),
+        ('Cola acuminata', 'Fatigue'): (
+            '1 lobe of kola nut',
+            'As needed, not in the evening',
+            'Occasional use',
+            'Chew slowly. Avoid late in the day — caffeine disturbs sleep.',
+        ),
+        ('Cola acuminata', 'Headache'): (
+            'Half a lobe of kola nut',
+            'Single use with rest',
+            'Single use',
+            'Chew and rest. Seek care for severe or repeated headache.',
+        ),
+        ('Cola acuminata', 'Loss of appetite'): (
+            'A small piece of kola nut',
+            'Before meals',
+            'Occasional use',
+            'Chew a small piece shortly before eating.',
+        ),
+        ('Cola acuminata', 'Nausea'): (
+            'A few sips of the cooled bark decoction',
+            'As needed',
+            'Single day',
+            'Sip slowly. Stop if vomiting starts.',
+        ),
+        ('Alstonia boonei', 'Malaria'): (
+            '1 small teacup (~150 ml) of bark decoction',
+            'Twice daily',
+            'For 3 days',
+            'Drink after food. Confirm malaria with a test and complete clinic treatment.',
+        ),
+        ('Alstonia boonei', 'Fever'): (
+            '1 teacup of leaf infusion',
+            'Twice daily',
+            'For 2 days',
+            'Drink warm after food.',
+        ),
+        ('Alstonia boonei', 'Rheumatism'): (
+            'Half a teacup to drink, plus a warm joint wash',
+            'Once daily',
+            'For up to 5 days',
+            'Drink after food and bathe the painful joints with the warm liquid.',
+        ),
+        ('Alstonia boonei', 'Diarrhea'): (
+            'Half a teacup (~75 ml) of bark decoction',
+            'Twice daily',
+            'For 2 days; seek care if blood or dehydration',
+            'Take small sips and drink extra clean water.',
+        ),
+        ('Ocimum gratissimum', 'Cough'): (
+            '1 teacup of warm leaf infusion',
+            '2-3 times daily',
+            'For up to 5 days',
+            'Drink warm; a little honey may be added.',
+        ),
+        ('Ocimum gratissimum', 'Stomach ache'): (
+            '2 tablespoons of leaf juice diluted in water',
+            'Twice daily',
+            'For 2 days',
+            'Drink after food.',
+        ),
+        ('Ocimum gratissimum', 'Fever'): (
+            '1 basin of leaf-boiled water',
+            'Once daily',
+            'For 2-3 days',
+            'Sponge or bathe the body with the lukewarm water.',
+        ),
+        ('Ocimum gratissimum', 'Nausea'): (
+            'Half a teacup of mild leaf infusion',
+            'As needed',
+            'Single day',
+            'Sip slowly.',
+        ),
+        ('Ocimum gratissimum', 'Diarrhea'): (
+            'Half a teacup of leaf decoction',
+            'Twice daily',
+            'For 2 days',
+            'Drink after food with extra clean water.',
+        ),
+        ('Zingiber officinale', 'Nausea'): (
+            '1 teacup infusion from 3-4 thin slices of fresh rhizome',
+            'Up to 3 times daily',
+            'As needed',
+            'Sip warm. For pregnancy nausea, ask a midwife first.',
+        ),
+        ('Zingiber officinale', 'Cough'): (
+            '1 teacup of ginger decoction with honey',
+            'Twice daily',
+            'For up to 5 days',
+            'Drink warm after food.',
+        ),
+        ('Zingiber officinale', 'Menstrual pain'): (
+            '1 teacup of warm ginger infusion',
+            '2-3 times daily while in pain',
+            'During menstruation',
+            'Drink warm and rest.',
+        ),
+        ('Zingiber officinale', 'Loss of appetite'): (
+            '2-3 thin slices of fresh rhizome, chewed',
+            'Before meals',
+            'As needed',
+            'Chew shortly before eating.',
+        ),
+        ('Zingiber officinale', 'Rheumatism'): (
+            'Warm crushed paste covering the joint',
+            'Once daily',
+            'For up to 5 days',
+            'Apply warm for about 20 minutes. Protect the skin from burns.',
+        ),
+        ('Curcuma longa', 'Wounds'): (
+            'A light dusting of rhizome powder',
+            'Once daily on a clean wound',
+            'Until a scab forms',
+            'External use on minor wounds only. Seek care for deep cuts.',
+        ),
+        ('Curcuma longa', 'Ulcers'): (
+            'Half a teaspoon of powder in warm water',
+            'Once daily',
+            'For up to 7 days',
+            'Take after food. Stomach ulcers need clinic review.',
+        ),
+        ('Curcuma longa', 'Skin rash'): (
+            'A thin layer of rhizome paste',
+            'Twice daily',
+            'Until clear',
+            'External use. Rinse before reapplying.',
+        ),
+        ('Allium sativum', 'Hypertension'): (
+            '1 crushed clove macerated in water',
+            'Once daily in the morning',
+            'Ongoing household use',
+            'Take after food. Keep prescribed drugs; stop high doses before surgery.',
+        ),
+        ('Allium sativum', 'Cough'): (
+            '1 teaspoon of garlic-honey mixture',
+            'Twice daily',
+            'For up to 5 days',
+            'Take after food.',
+        ),
+        ('Allium sativum', 'Intestinal worms'): (
+            '1 raw clove',
+            'Once daily on an empty stomach',
+            'For 3 days',
+            'Swallow with water. Stop if the stomach burns.',
+        ),
+        ('Aloe vera', 'Burns'): (
+            'Fresh gel covering the burn',
+            '2-3 times daily',
+            'Until healed',
+            'External use on minor burns only. Cool with clean water first.',
+        ),
+        ('Aloe vera', 'Wounds'): (
+            'A split leaf laid on the cut',
+            'Once daily with a clean dressing',
+            'Until healed',
+            'External use. Seek care for deep wounds.',
+        ),
+        ('Aloe vera', 'Skin rash'): (
+            'A thin layer of leaf gel',
+            'Twice daily',
+            'Until clear',
+            'External use on intact skin.',
+        ),
+        ('Aloe vera', 'Constipation'): (
+            '1 teaspoon of diluted leaf juice',
+            'Single dose at night',
+            'Single use; do not repeat without advice',
+            'Avoid during pregnancy. Stop if cramps occur.',
+        ),
+        ('Carica papaya', 'Malaria'): (
+            '1 teacup of leaf decoction',
+            'Twice daily',
+            'For 3 days',
+            'Drink after food. Confirm malaria with a test.',
+        ),
+        ('Carica papaya', 'Dysentery'): (
+            'Half a teaspoon of dried seed powder',
+            'Once daily',
+            'For 2 days',
+            'Take with food. Bloody diarrhoea needs clinic care.',
+        ),
+        ('Carica papaya', 'Wounds'): (
+            'Unripe fruit pulp covering the wound',
+            'Once daily',
+            'Until the wound granulates',
+            'External use on clean wounds.',
+        ),
+        ('Carica papaya', 'Intestinal worms'): (
+            '1 teaspoon of seed juice in water',
+            'Single morning dose',
+            'Single use',
+            'Small dose only — seeds are strong.',
+        ),
+        ('Carica papaya', 'Constipation'): (
+            '1 bowl of ripe fruit',
+            'Once daily',
+            'As needed',
+            'Eat the ripe fruit and drink water.',
+        ),
+        ('Mangifera indica', 'Diarrhea'): (
+            'Half a teacup of bark decoction',
+            'Twice daily',
+            'For 2 days',
+            'Take small sips plus oral rehydration fluids.',
+        ),
+        ('Mangifera indica', 'Cough'): (
+            '1 teacup of young-leaf infusion',
+            'Twice daily',
+            'For up to 5 days',
+            'Drink warm.',
+        ),
+        ('Mangifera indica', 'Toothache'): (
+            '1 mouthful of cooled bark decoction as a rinse',
+            '3 times daily',
+            'Until the pain eases',
+            'Rinse and spit out; see a dentist for lasting pain.',
+        ),
+        ('Mangifera indica', 'Fever'): (
+            '1 basin of leaf water',
+            'Once daily',
+            'For 2 days',
+            'Sponge children with lukewarm water. Seek care for high fever.',
+        ),
+        ('Psidium guajava', 'Diarrhea'): (
+            '1 teacup of young-leaf decoction',
+            'Twice daily',
+            'For 2 days',
+            'Drink after food plus oral rehydration fluids.',
+        ),
+        ('Psidium guajava', 'Dysentery'): (
+            'Half a teacup of bark decoction',
+            'Twice daily',
+            'For 2 days',
+            'Bloody diarrhoea needs clinic care.',
+        ),
+        ('Psidium guajava', 'Wounds'): (
+            'Crushed young leaves covering the cut',
+            'Once daily',
+            'Until healed',
+            'External use on clean cuts.',
+        ),
+        ('Psidium guajava', 'Nausea'): (
+            'Half a teacup of mild leaf infusion',
+            'As needed',
+            'Single day',
+            'Sip slowly.',
+        ),
+        ('Cymbopogon citratus', 'Fever'): (
+            '1 teacup of hot lemongrass tea',
+            '2-3 times daily',
+            'For 2-3 days',
+            'Drink hot and rest so the body sweats.',
+        ),
+        ('Cymbopogon citratus', 'Cough'): (
+            '1 teacup of lemongrass-ginger infusion',
+            'Twice daily',
+            'For up to 5 days',
+            'Drink warm.',
+        ),
+        ('Cymbopogon citratus', 'Stomach ache'): (
+            '1 teacup of warm infusion',
+            'Twice daily',
+            'For 2-3 days',
+            'Drink warm after meals.',
+        ),
+        ('Cymbopogon citratus', 'Hypertension'): (
+            '1 teacup of unsweetened tea',
+            'Once daily',
+            'Ongoing household use',
+            'Keep prescribed medication.',
+        ),
+        ('Khaya senegalensis', 'Malaria'): (
+            '1 small teacup of the bitter bark decoction',
+            'Once daily',
+            'For 3 days only',
+            'Short course — the bark is strong. Confirm malaria with a test.',
+        ),
+        ('Khaya senegalensis', 'Fever'): (
+            'Bark decoction added to bathing water',
+            'Once daily',
+            'For 2 days',
+            'Bathe with the lukewarm water.',
+        ),
+        ('Khaya senegalensis', 'Skin rash'): (
+            'A light dusting of dried bark powder',
+            'Once daily',
+            'Until clear',
+            'External use on intact skin.',
+        ),
+        ('Nauclea latifolia', 'Malaria'): (
+            '1 small teacup of root decoction',
+            'Once daily',
+            'For 3 days',
+            'Conservative dose — roots are potent. Confirm malaria with a test.',
+        ),
+        ('Nauclea latifolia', 'Dysentery'): (
+            'Half a teacup of bark decoction',
+            'Twice daily',
+            'For 2 days',
+            'Bloody diarrhoea needs clinic care.',
+        ),
+        ('Nauclea latifolia', 'Jaundice'): (
+            'Half a teacup of root decoction',
+            'Once daily',
+            'For 3 days',
+            'Yellowing of the eyes needs clinic review.',
+        ),
+        ('Piper guineense', 'Cough'): (
+            'Half a teaspoon of ground seed in honey',
+            'Twice daily',
+            'For up to 5 days',
+            'Take after food.',
+        ),
+        ('Piper guineense', 'Menstrual pain'): (
+            '1 teacup of seed decoction',
+            'Twice daily',
+            'During menstruation and post-partum days',
+            'Drink warm. Heavy bleeding needs a midwife.',
+        ),
+        ('Piper guineense', 'Fatigue'): (
+            '1 teacup of leaf infusion',
+            'Once daily',
+            'For up to 7 days',
+            'Drink warm in the morning.',
+        ),
+        ('Tetrapleura tetraptera', 'Menstrual pain'): (
+            '1 teacup of fruit decoction',
+            'Twice daily',
+            'For post-partum days as guided',
+            'Drink warm. Heavy bleeding needs a midwife.',
+        ),
+        ('Tetrapleura tetraptera', 'Cough'): (
+            'Half a teacup of fruit decoction',
+            'Twice daily',
+            'For up to 5 days',
+            'Drink warm.',
+        ),
+        ('Tetrapleura tetraptera', 'Rheumatism'): (
+            'Bark infusion added to bathing water',
+            'Once daily',
+            'For up to 5 days',
+            'Soak the painful joints in the warm water.',
+        ),
+        ('Xylopia aethiopica', 'Cough'): (
+            '1 teacup of fruit decoction, plus steam',
+            'Twice daily',
+            'For up to 5 days',
+            'Drink warm and inhale the steam carefully.',
+        ),
+        ('Xylopia aethiopica', 'Menstrual pain'): (
+            'Half a teaspoon of powdered fruit in warm water',
+            'Twice daily',
+            'For post-partum days as guided',
+            'Drink warm. Heavy bleeding needs a midwife.',
+        ),
+        ('Xylopia aethiopica', 'Stomach ache'): (
+            'Half a teacup of fruit decoction',
+            'Twice daily',
+            'For 2 days',
+            'Drink warm after food.',
+        ),
+        ('Garcinia kola', 'Cough'): (
+            '1 small piece of bitter kola, chewed',
+            '2-3 times daily',
+            'For up to 5 days',
+            'Chew slowly.',
+        ),
+        ('Garcinia kola', 'Jaundice'): (
+            'Half a teaspoon of seed powder',
+            'Once daily',
+            'For up to 7 days',
+            'Take with food. Yellowing of the eyes needs clinic review.',
+        ),
+        ('Garcinia kola', 'Asthma'): (
+            '1 small piece of bitter kola, chewed',
+            'As needed',
+            'Occasional use',
+            'Breathing difficulty needs urgent care — this is not emergency treatment.',
+        ),
+        ('Enantia chlorantha', 'Malaria'): (
+            '1 small teacup of the yellow-bark decoction',
+            'Once daily',
+            'For 3 days',
+            'Bitter and strong — short course only. Confirm malaria with a test.',
+        ),
+        ('Enantia chlorantha', 'Fever'): (
+            'Half a teacup of bark decoction',
+            'Twice daily',
+            'For 2 days',
+            'Drink after food.',
+        ),
+        ('Enantia chlorantha', 'Jaundice'): (
+            'Half a teacup of bark decoction',
+            'Once daily',
+            'For 3 days',
+            'Yellowing of the eyes needs clinic review.',
+        ),
+        ('Annona muricata', 'Fatigue'): (
+            '1 teacup of leaf infusion',
+            'Once daily',
+            'For up to 7 days',
+            'Do not use daily for long periods.',
+        ),
+        ('Annona muricata', 'Insomnia'): (
+            '1 teacup of leaf infusion in the evening',
+            'Once at night',
+            'Short courses',
+            'Take about 1 hour before sleep. Avoid long daily use.',
+        ),
+        ('Annona muricata', 'Hypertension'): (
+            '1 teacup of leaf infusion',
+            'Once daily',
+            'Ongoing with regular breaks',
+            'Keep prescribed medication. Avoid prolonged daily use.',
+        ),
+        ('Senna alata', 'Skin rash'): (
+            'Crushed leaves rubbed on the patches',
+            'Twice daily',
+            'Until clear (max 2 weeks)',
+            'External use. Stop if irritation appears.',
+        ),
+        ('Senna alata', 'Wounds'): (
+            'Leaf paste on the sores',
+            'Once daily',
+            'Until healed',
+            'External use on minor sores.',
+        ),
+        ('Ageratum conyzoides', 'Wounds'): (
+            'Fresh crushed leaves pressed on the cut',
+            'Single first-aid application',
+            'Once, then a clean dressing',
+            'External first aid. Clean the wound properly afterwards.',
+        ),
+        ('Ageratum conyzoides', 'Skin rash'): (
+            'Whole-plant boiled water added to bathing water',
+            'Once daily',
+            'For 2-3 days',
+            'External use only — do not drink this preparation.',
+        ),
+        ('Chromolaena odorata', 'Wounds'): (
+            'Leaf juice squeezed onto the cut',
+            'Single first-aid application',
+            'Once',
+            'External first aid to slow bleeding. Dress the wound afterwards.',
+        ),
+        ('Chromolaena odorata', 'Burns'): (
+            'Crushed leaves on the burn',
+            'Once daily',
+            'Until healed',
+            'External use on minor burns only.',
+        ),
+        ('Anogeissus leiocarpa', 'Wounds'): (
+            'A light dusting of dried bark powder',
+            'Once daily',
+            'Until a scab forms',
+            'External use on clean wounds.',
+        ),
+        ('Anogeissus leiocarpa', 'Skin rash'): (
+            'Leaf decoction added to washing water',
+            'Once daily',
+            'For 2-3 days',
+            'External wash.',
+        ),
+        ('Anogeissus leiocarpa', 'Dysentery'): (
+            'Half a teacup of bark decoction',
+            'Twice daily',
+            'For 2 days',
+            'Bloody diarrhoea needs clinic care.',
+        ),
+        ('Zanthoxylum gilletii', 'Toothache'): (
+            'A small piece of bark, chewed',
+            'As needed',
+            'Single uses',
+            'Chew on the painful side until numb, then spit out. See a dentist.',
+        ),
+        ('Zanthoxylum gilletii', 'Eye infection'): (
+            'Highly diluted wash, practitioner-prepared only',
+            'Single use',
+            'Single use',
+            'Eye preparations are risky — clinic eye care is safer.',
+        ),
+        ('Zanthoxylum gilletii', 'Ulcers'): (
+            'Half a teacup of bark decoction',
+            'Once daily',
+            'For up to 7 days',
+            'Take after food. Ulcers need clinic review.',
+        ),
+    }
+
+    @classmethod
+    def dosage_for(cls, plant_name, symptom_name, prep_name):
+        """Return (dosage, frequency, duration, administration) for a use."""
+        if plant_name in cls.HIGH_RISK_PLANTS:
+            return (
+                'No self-medication dose — practitioner only',
+                'Only as directed by an experienced practitioner',
+                'Shortest course decided by the practitioner',
+                'Do not prepare or take this plant without an experienced practitioner. '
+                'This is a first-record educational entry, not a recipe.',
+            )
+        override = cls.DOSAGE_OVERRIDES.get((plant_name, symptom_name))
+        if override:
+            return override
+        return cls.DOSAGE_BY_PREP.get(prep_name, cls.DOSAGE_BY_PREP['OTHER'])
+
     def _traditional_uses(self, plants, symptoms, regions, methods, users):
         practitioners = [u for u in users.values() if u.role == User.Role.PRACTITIONER]
         experts = [u for u in users.values() if u.role == User.Role.EXPERT]
@@ -1053,6 +1743,7 @@ class Command(BaseCommand):
             part = PlantPart.objects.filter(plant=plant, part_type=ptype).first()
             contributor = practitioners[index % len(practitioners)]
             is_verified = index % 5 != 0  # ~80% verified
+            dosage, frequency, duration, administration = self.dosage_for(pname, sname, prep)
 
             use, was_created = TraditionalUse.objects.get_or_create(
                 plant=plant, symptom=symptom, region=region, description=desc,
@@ -1061,12 +1752,23 @@ class Command(BaseCommand):
                     'preparation': methods.get(prep),
                     'community': Community.objects.filter(region=region).first() if region else None,
                     'cultural_context': context,
+                    'dosage': dosage,
+                    'frequency': frequency,
+                    'duration': duration,
+                    'administration': administration,
                     'is_verified': is_verified,
                     'source': f'Documented by {contributor.get_full_name() or contributor.username} (Ancestor demo dataset)',
                     'contributor': contributor,
                     'verified_by': RANDOM.choice(experts) if is_verified else None,
                 },
             )
+            if not was_created and not use.dosage:
+                # Backfill dosage on records seeded before dosage existed.
+                use.dosage = dosage
+                use.frequency = frequency
+                use.duration = duration
+                use.administration = administration
+                use.save(update_fields=['dosage', 'frequency', 'duration', 'administration'])
             if was_created:
                 created += 1
                 when = now - timedelta(days=RANDOM.randint(20, 400), hours=RANDOM.randint(0, 23))
@@ -1746,6 +2448,16 @@ class Command(BaseCommand):
             submitted_at = now - timedelta(days=RANDOM.randint(5, 240))
             review_date = submitted_at + timedelta(days=RANDOM.randint(2, 12)) if reviewer_key else None
 
+            # Submissions sent back for missing dosage keep blank dosage fields
+            # so the review story stays coherent; the rest carry dosage.
+            needs_dosage = not (reason and any(
+                k in reason.lower() for k in ('dos', 'quant')))
+            if needs_dosage:
+                s_dosage, s_freq, s_dur, s_admin = self.dosage_for(
+                    plant_key or proposed_scientific, symptom_name, prep)
+            else:
+                s_dosage, s_freq, s_dur, s_admin = '', '', '', ''
+
             defaults = {
                 'proposed_scientific_name': proposed_scientific,
                 'proposed_common_name': proposed_common,
@@ -1754,6 +2466,10 @@ class Command(BaseCommand):
                 'plant_part': part,
                 'preparation_method': prep,
                 'traditional_use_description': description,
+                'dosage': s_dosage,
+                'frequency': s_freq,
+                'duration': s_dur,
+                'administration': s_admin,
                 'cultural_context': context,
                 'community_name': community.name if community else (community_label or ''),
                 'supporting_information': 'Submitted through the Ancestor practitioner portal (demo dataset).',
@@ -1773,6 +2489,11 @@ class Command(BaseCommand):
             submission.symptom = symptom
             submission.region = region
             submission.community = community
+            if needs_dosage and not submission.dosage:
+                submission.dosage = s_dosage
+                submission.frequency = s_freq
+                submission.duration = s_dur
+                submission.administration = s_admin
             submission.status = status
             submission.review_comments = comments
             submission.review_reason = reason
