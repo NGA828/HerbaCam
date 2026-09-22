@@ -18,8 +18,52 @@ from plants.models import Plant
 
 logger = logging.getLogger(__name__)
 
-IDENTIFICATION_PROMPT = """You are a botanical expert specializing in plant identification, 
+# Medicinal species documented in the Ancestor Cameroon knowledge base.
+# The model still identifies from visual evidence only — this list only helps
+# it prefer the correct Cameroon species when several look alike, so the
+# identification matches a database plant (with photos and dosage) whenever
+# the visual evidence genuinely supports it.
+CAMEROON_KNOWN_SPECIES = [
+    'Azadirachta indica (Neem)',
+    'Moringa oleifera (Moringa)',
+    'Prunus africana (African Cherry)',
+    'Vernonia amygdalina (Bitter Leaf)',
+    'Cola acuminata (Kola Nut)',
+    'Alstonia boonei (Stool Wood)',
+    'Ocimum gratissimum (African Basil)',
+    'Rauvolfia vomitoria',
+    'Zingiber officinale (Ginger)',
+    'Curcuma longa (Turmeric)',
+    'Allium sativum (Garlic)',
+    'Aloe vera (Aloe)',
+    'Carica papaya (Papaya)',
+    'Mangifera indica (Mango)',
+    'Psidium guajava (Guava)',
+    'Cymbopogon citratus (Lemongrass)',
+    'Khaya senegalensis (African Mahogany)',
+    'Nauclea latifolia (African Peach)',
+    'Piper guineense (Ashanti Pepper)',
+    'Tetrapleura tetraptera (Prekese)',
+    'Xylopia aethiopica (Ethiopian Pepper)',
+    'Garcinia kola (Bitter Kola)',
+    'Picralima nitida (Akuamma)',
+    'Enantia chlorantha (African Yellow Wood)',
+    'Voacanga africana (Voacanga)',
+    'Annona muricata (Soursop)',
+    'Senna alata (Candle Bush)',
+    'Ageratum conyzoides (Billy Goat Weed)',
+    'Chromolaena odorata (Siam Weed)',
+    'Securidaca longipedunculata (Violet Tree)',
+    'Anogeissus leiocarpa (African Birch)',
+    'Zanthoxylum gilletii (African Satinwood)',
+]
+
+IDENTIFICATION_PROMPT = """You are a botanical expert specializing in plant identification,
 with particular expertise in African and Cameroonian flora.
+
+Species documented in the Cameroon medicinal knowledge base (prefer one of
+these ONLY when the visual evidence genuinely supports it — never force it):
+""" + '\n'.join('- ' + s for s in CAMEROON_KNOWN_SPECIES) + """
 
 First determine whether the image contains a real plant specimen or a visible
 plant part (leaf, flower, fruit, seed, bark, stem, or whole plant). Only if it
@@ -71,6 +115,9 @@ Important rules:
   but do not force a Cameroon species when the image supports another species.
 - Be honest about uncertainty - do not guess with high confidence
 - Do not diagnose illness, prescribe treatment, recommend dosage, or claim that a plant is safe to consume
+- Never state a dosage, frequency or treatment duration. Dosage is shown by the
+  application from its expert-verified traditional-use database when the species
+  is in the database; if it is not, report dosage as unknown and point to the plant page
 - Separate traditional knowledge from scientific evidence and label uncertainty explicitly
 - If the image is not a plant, identify it as "N/A" with confidence 0.0 and explain why
 - The image must contain a visible plant or plant part; do not infer a plant from context alone

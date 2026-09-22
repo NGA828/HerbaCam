@@ -46,6 +46,18 @@ class TraditionalUse(models.Model):
     description = models.TextField(help_text='Detailed description of the traditional use')
     cultural_context = models.TextField(blank=True, default='',
                                          help_text='Cultural or ceremonial context')
+    # Traditionally reported dosage — how much to take and how to take it.
+    # These fields document what contributors report; they are educational
+    # records, never prescriptions. Shown only with verification status,
+    # safety warnings and a medical disclaimer.
+    dosage = models.CharField(max_length=255, blank=True, default='',
+                               help_text='Traditionally reported amount per intake (e.g. 1 teacup ~150 ml)')
+    frequency = models.CharField(max_length=255, blank=True, default='',
+                                  help_text='Traditionally reported frequency (e.g. twice daily)')
+    duration = models.CharField(max_length=255, blank=True, default='',
+                                 help_text='Traditionally reported duration (e.g. for 3 days)')
+    administration = models.TextField(blank=True, default='',
+                                       help_text='How the preparation is traditionally taken (route, timing, with/without food)')
     is_verified = models.BooleanField(default=False, help_text='Verified by expert reviewer')
     source = models.CharField(max_length=255, blank=True, default='',
                                help_text='Source of this knowledge (contributor, publication, etc.)')
@@ -98,6 +110,16 @@ class KnowledgeSubmission(models.Model):
     preparation_method = models.CharField(max_length=100, blank=True, default='')
     traditional_use_description = models.TextField(
         help_text='Detailed description of the traditional use')
+    # Practitioner-reported dosage. Reviewed by experts before publication;
+    # copied onto the TraditionalUse record when the submission is approved.
+    dosage = models.CharField(max_length=255, blank=True, default='',
+                               help_text='Amount per intake as traditionally used')
+    frequency = models.CharField(max_length=255, blank=True, default='',
+                                  help_text='How often the preparation is traditionally taken')
+    duration = models.CharField(max_length=255, blank=True, default='',
+                                 help_text='How long the preparation is traditionally taken')
+    administration = models.TextField(blank=True, default='',
+                                       help_text='How the preparation is taken (route, timing, with/without food)')
     cultural_context = models.TextField(blank=True, default='')
     region = models.ForeignKey(Region, on_delete=models.SET_NULL, null=True, blank=True)
     community = models.ForeignKey(Community, on_delete=models.SET_NULL, null=True, blank=True)

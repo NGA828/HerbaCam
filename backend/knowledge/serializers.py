@@ -10,6 +10,8 @@ class PreparationMethodSerializer(serializers.ModelSerializer):
 
 class TraditionalUseSerializer(serializers.ModelSerializer):
     plant_name = serializers.CharField(source='plant.scientific_name', read_only=True)
+    plant_common_name = serializers.CharField(source='plant.common_name', read_only=True, default='')
+    plant_image = serializers.SerializerMethodField()
     symptom_name = serializers.CharField(source='symptom.name', read_only=True)
     part_display = serializers.CharField(source='plant_part.get_part_type_display', read_only=True, default='')
     preparation_display = serializers.CharField(source='preparation.get_name_display', read_only=True, default='')
@@ -17,12 +19,26 @@ class TraditionalUseSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = TraditionalUse
-        fields = ['id', 'plant', 'plant_name', 'symptom', 'symptom_name',
+        fields = ['id', 'plant', 'plant_name', 'plant_common_name', 'plant_image',
+                  'symptom', 'symptom_name',
                   'plant_part', 'part_display', 'preparation', 'preparation_display',
                   'region', 'region_name', 'community', 'description',
+                  'dosage', 'frequency', 'duration', 'administration',
                   'cultural_context', 'is_verified', 'source',
                   'contributor', 'verified_by', 'created_at']
         read_only_fields = ['is_verified', 'verified_by', 'contributor']
+
+    def get_plant_image(self, obj):
+        # Real database photo of THIS plant, so the UI never has to guess
+        # which picture belongs to the name (guessing causes mismatches).
+        try:
+            if obj.plant and obj.plant.image:
+                request = self.context.get('request')
+                url = obj.plant.image.url
+                return request.build_absolute_uri(url) if request else url
+        except (ValueError, AttributeError):
+            pass
+        return None
 
 
 class KnowledgeSubmissionSerializer(serializers.ModelSerializer):
@@ -40,6 +56,7 @@ class KnowledgeSubmissionSerializer(serializers.ModelSerializer):
                   'local_name', 'language', 'symptom', 'symptom_name', 'proposed_symptom_name',
                   'plant_part', 'preparation_method', 'preparation_method_name',
                   'traditional_use_description',
+                  'dosage', 'frequency', 'duration', 'administration',
                   'cultural_context', 'region', 'region_name', 'community', 'community_name',
                   'supporting_information',
                   'reviewer', 'reviewer_name', 'review_comments', 'review_reason', 'review_date',

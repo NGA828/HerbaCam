@@ -78,6 +78,10 @@ class SymptomSearchView(APIView):
                 'plant_part': use.plant_part.get_part_type_display() if use.plant_part else '',
                 'preparation': use.preparation.get_name_display() if use.preparation else '',
                 'region': use.region.name if use.region else '',
+                'dosage': use.dosage,
+                'frequency': use.frequency,
+                'duration': use.duration,
+                'administration': use.administration,
                 'is_verified': use.is_verified,
                 'disclaimer': 'Traditionally associated with this symptom. This is not medical advice.',
             })
