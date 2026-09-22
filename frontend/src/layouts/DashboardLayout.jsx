@@ -134,9 +134,7 @@ export default function DashboardLayout() {
       {/* Sidebar */}
       <aside className={`fixed lg:static inset-y-0 left-0 z-50 w-[260px] bg-white border-r border-stone-200 flex flex-col transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
         <div className="h-16 flex items-center gap-2 px-5 border-b border-stone-100 shrink-0">
-          <div className="w-8 h-8 bg-gradient-to-br from-green-600 to-emerald-700 rounded-lg flex items-center justify-center shadow-sm">
-            <Leaf className="w-5 h-5 text-white" />
-          </div>
+          <LogoMark className="h-8 w-8" />
           <span className="font-bold text-lg text-green-800">Ancestor</span>
           <button className="ml-auto lg:hidden p-1 rounded hover:bg-stone-100" onClick={() => setSidebarOpen(false)}>
             <X className="w-5 h-5" />

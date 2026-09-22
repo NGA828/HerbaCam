@@ -160,10 +160,27 @@ class ReviewSubmissionView(APIView):
             submission.status = KnowledgeSubmission.Status.APPROVED
             # Create verified traditional use record
             if submission.plant and submission.symptom:
+                # Resolve the contributor's free-text part/preparation onto
+                # catalogue records so the published use (incl. dosage) keeps
+                # its preparation display and dosage information.
+                from plants.models import PlantPart
+                part = PlantPart.objects.filter(
+                    plant=submission.plant,
+                    part_type__iexact=(submission.plant_part or '').strip(),
+                ).first()
+                preparation = PreparationMethod.objects.filter(
+                    name__iexact=(submission.preparation_method or '').strip(),
+                ).first()
                 TraditionalUse.objects.create(
                     plant=submission.plant,
                     symptom=submission.symptom,
+                    plant_part=part,
+                    preparation=preparation,
                     description=submission.traditional_use_description,
+                    dosage=submission.dosage,
+                    frequency=submission.frequency,
+                    duration=submission.duration,
+                    administration=submission.administration,
                     cultural_context=submission.cultural_context,
                     region=submission.region,
                     community=submission.community,

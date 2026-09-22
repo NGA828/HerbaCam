@@ -207,6 +207,10 @@ export function SubmissionDetailPage({ review = false }) {
       cultural_context: x.cultural_context || '',
       plant_part: x.plant_part || '',
       preparation_method: x.preparation_method || '',
+      dosage: x.dosage || '',
+      frequency: x.frequency || '',
+      duration: x.duration || '',
+      administration: x.administration || '',
       supporting_information: x.supporting_information || '',
       local_name: x.local_name || '',
       language: x.language || '',
@@ -286,6 +290,10 @@ export function SubmissionDetailPage({ review = false }) {
     ['Region', x.region_name],
     ['Community', x.community_name],
     ['Preparation', x.preparation_method_name || x.preparation_method],
+    ['Amount per intake', x.dosage],
+    ['How often', x.frequency],
+    ['How long', x.duration],
+    ['How to take it', x.administration],
     ['Supporting information', x.supporting_information],
   ];
 
@@ -337,6 +345,22 @@ export function SubmissionDetailPage({ review = false }) {
               <label className="block">
                 <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-stone-500">Cultural context</span>
                 <textarea value={draft.cultural_context || ''} onChange={(e) => setDraft({ ...draft, cultural_context: e.target.value })} className={inputCls + ' min-h-20'} />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-stone-500">Amount per intake</span>
+                <input value={draft.dosage || ''} onChange={(e) => setDraft({ ...draft, dosage: e.target.value })} placeholder="e.g. 1 teacup (~150 ml)" className={inputCls} />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-stone-500">How often</span>
+                <input value={draft.frequency || ''} onChange={(e) => setDraft({ ...draft, frequency: e.target.value })} placeholder="e.g. Twice daily" className={inputCls} />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-stone-500">How long</span>
+                <input value={draft.duration || ''} onChange={(e) => setDraft({ ...draft, duration: e.target.value })} placeholder="e.g. For 3 days" className={inputCls} />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-stone-500">How to take it</span>
+                <textarea value={draft.administration || ''} onChange={(e) => setDraft({ ...draft, administration: e.target.value })} placeholder="e.g. Drink warm after food" className={inputCls + ' min-h-20'} />
               </label>
               <label className="block">
                 <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-stone-500">Supporting information</span>

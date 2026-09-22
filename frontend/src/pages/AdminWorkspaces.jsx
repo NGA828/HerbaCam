@@ -17,7 +17,7 @@ import {
   FormPanel, KpiCard, Skeleton, StatusBadge, TableCard, Td, Th, Card,
   btnPrimary, btnSecondary, formatDate, formatDateTime, inputCls, selectCls, useList,
 } from '../components/admin/ui';
-import { plantImage, generatedFor } from '../utils/images';
+import { plantImage, withImageFallback } from '../utils/images';
 
 /* Shared bits used across the admin suite ----------------------------------- */
 

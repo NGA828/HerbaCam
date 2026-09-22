@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast, describeError } from '../contexts/ToastContext';
-import { Leaf, Mail, Lock, User, AlertCircle, Loader2 } from 'lucide-react';
+import { Mail, Lock, User, AlertCircle, Loader2 } from 'lucide-react';
+import { LogoMark } from '../components/Logo';
 
 export default function RegisterPage() {
   const { register } = useAuth();

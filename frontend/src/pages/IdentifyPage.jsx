@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { identificationAPI } from '../api/client';
+import { identificationAPI, knowledgeAPI, safetyAPI } from '../api/client';
 import { Link, useParams } from 'react-router-dom';
 import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../components/ui/ConfirmDialog';
 import { Reveal } from '../components/ui/motion';
+import DosageInfo from '../components/DosageInfo';
 import {
   Camera, Upload, X, AlertCircle, Leaf, AlertTriangle, ArrowRight, Image, Info,
   Brain, Flag, Loader2, CheckCircle2, Sparkles, ScanEye
@@ -387,11 +388,18 @@ export default function IdentifyPage() {
                       </div>
                       
                       {i === 0 && (
-                        <div className="mt-6 pt-5 border-t border-stone-100 flex items-center justify-between">
+                        <div className="mt-6 pt-5 border-t border-stone-100">
                           {r.plant ? (
-                            <Link to={`/plants/${r.plant}`} className="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-700 text-white rounded-xl font-semibold hover:bg-emerald-800 transition-all shadow-sm hover:shadow-md active:scale-[0.98] text-sm">
-                              View Plant Details <ArrowRight className="w-4 h-4" />
-                            </Link>
+                            <>
+                              <MatchedPlantDosage
+                                plantId={r.plant}
+                                initialUses={i === 0 ? result.traditional_uses : undefined}
+                                initialRisk={i === 0 ? result.safety?.risk_level : undefined}
+                              />
+                              <Link to={`/plants/${r.plant}`} className="mt-4 inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-700 text-white rounded-xl font-semibold hover:bg-emerald-800 transition-all shadow-sm hover:shadow-md active:scale-[0.98] text-sm">
+                                View Plant Details <ArrowRight className="w-4 h-4" />
+                              </Link>
+                            </>
                           ) : (
                             <p className="text-sm text-stone-500 italic flex items-center gap-2">
                               <Info className="w-4 h-4" /> This plant is not yet in our Cameroon-specific database.
@@ -456,6 +464,55 @@ export default function IdentifyPage() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Verified traditional uses (with dosage) for the matched database plant. */
+function MatchedPlantDosage({ plantId, initialUses, initialRisk }) {
+  const [uses, setUses] = useState(initialUses || []);
+  const [risk, setRisk] = useState(initialRisk || '');
+  const [loaded, setLoaded] = useState(Boolean(initialUses));
+
+  useEffect(() => {
+    // Fresh identifications already carry dosage from the backend; older
+    // history entries are backfilled with a fetch by plant id.
+    if (initialUses) {
+      setUses(initialUses);
+      setRisk(initialRisk || '');
+      setLoaded(true);
+      return;
+    }
+    let cancelled = false;
+    Promise.all([
+      knowledgeAPI.traditionalUses({ plant: plantId, page_size: 3 }),
+      safetyAPI.list({ plant: plantId }),
+    ]).then(([usesRes, safeRes]) => {
+      if (cancelled) return;
+      setUses(usesRes.data.results || usesRes.data || []);
+      const records = safeRes.data.results || safeRes.data || [];
+      setRisk(records[0]?.risk_level || '');
+    }).catch(() => {}).finally(() => {
+      if (!cancelled) setLoaded(true);
+    });
+    return () => { cancelled = true; };
+  }, [plantId, initialUses, initialRisk]);
+
+  if (!loaded || uses.length === 0) return null;
+  return (
+    <div className="rounded-2xl border border-emerald-100 bg-emerald-50/40 p-4">
+      <p className="text-xs font-bold uppercase tracking-wider text-emerald-700 mb-1">
+        In our Cameroon knowledge base — how it is traditionally taken
+      </p>
+      {uses.slice(0, 2).map((u) => (
+        <div key={u.id} className="mt-2">
+          <p className="text-sm font-semibold text-stone-800">{u.symptom_name}</p>
+          <DosageInfo use={u} riskLevel={risk} compact />
+        </div>
+      ))}
+      <p className="mt-2 text-[11px] italic text-stone-500">
+        Full preparation details, safety and evidence are on the plant page.
+      </p>
     </div>
   );
 }

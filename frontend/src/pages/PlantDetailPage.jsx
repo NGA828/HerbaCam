@@ -4,6 +4,7 @@ import { plantsAPI, knowledgeAPI, evidenceAPI, safetyAPI, analyticsAPI } from '.
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { Reveal } from '../components/ui/motion';
+import DosageInfo from '../components/DosageInfo';
 import { plantImage, withImageFallback } from '../utils/images';
 import { Heart, MapPin, AlertTriangle, Shield, BookOpen, ArrowLeft, CheckCircle } from 'lucide-react';
 
@@ -104,6 +105,9 @@ export default function PlantDetailPage() {
               </button>
             )}
           </div>
+          {plant.image_credit && (
+            <p className="px-6 sm:px-8 pt-3 text-[11px] italic text-stone-400">Photo: {plant.image_credit}</p>
+          )}
           <div className="p-6 sm:p-8">
             <div className="flex items-start justify-between gap-4">
               <div>
@@ -164,6 +168,7 @@ export default function PlantDetailPage() {
                     {use.preparation_display && <span className="px-2 py-1 bg-stone-100 rounded">{use.preparation_display}</span>}
                     {use.region_name && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {use.region_name}</span>}
                   </div>
+                  <DosageInfo use={use} riskLevel={safety[0]?.risk_level} />
                   {use.cultural_context && (
                     <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2 mt-3 italic">
                       {use.cultural_context}

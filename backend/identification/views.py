@@ -123,6 +123,39 @@ class PlantIdentifyView(APIView):
         if db_match and not db_match.get('found'):
             response_data['database_notice'] = db_match.get('message', '')
 
+        # When the species is in our Cameroon knowledge base, attach its
+        # verified traditional uses (with dosage / how-to-take) and safety
+        # level directly, so the app always tells the user the traditional
+        # dosage right after identification — no extra fetch required.
+        # The AI itself never invents dosage; only database records do.
+        response_data['traditional_uses'] = []
+        response_data['safety'] = None
+        if plant_obj is not None:
+            try:
+                from knowledge.models import TraditionalUse
+                from knowledge.serializers import TraditionalUseSerializer
+                from safety.models import SafetyInformation
+                uses = TraditionalUse.objects.filter(
+                    plant=plant_obj, is_verified=True
+                ).select_related(
+                    'plant', 'symptom', 'plant_part', 'preparation', 'region'
+                )[:3]
+                response_data['traditional_uses'] = TraditionalUseSerializer(
+                    uses, many=True, context={'request': request}
+                ).data
+                safety = SafetyInformation.objects.filter(
+                    plant=plant_obj
+                ).order_by('-is_verified').first()
+                if safety:
+                    response_data['safety'] = {
+                        'risk_level': safety.risk_level,
+                        'precautions': safety.precautions,
+                        'pregnancy_warning': safety.pregnancy_warning,
+                        'children_warning': safety.children_warning,
+                    }
+            except Exception:
+                logger.exception('Could not attach traditional uses to identification response')
+
         # Notify user
         send_notification(
             request.user,

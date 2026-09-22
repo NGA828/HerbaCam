@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
-import { Leaf, Heart } from 'lucide-react';
+import { Heart } from 'lucide-react';
+import { LogoMark } from './Logo';
 
 export default function Footer() {
   return (

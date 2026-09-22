@@ -134,6 +134,7 @@ VITE_API_URL=/api
 - Browse medicinal plants with search and filtering
 - Search by symptom to find traditionally associated plants
 - View plant details with traditional uses, evidence, and safety
+- See traditionally reported dosage (amount, frequency, duration, how to take it) on every verified use
 - Read educational articles
 - AI-powered plant identification (login required)
 

@@ -12,6 +12,7 @@ export default function KnowledgeSubmissionForm() {
     plant: '', proposed_scientific_name: '', proposed_common_name: '',
     local_name: '', language: '', symptom: '', proposed_symptom_name: '',
     plant_part: '', preparation_method: '', traditional_use_description: '',
+    dosage: '', frequency: '', duration: '', administration: '',
     cultural_context: '', region: '', community_name: '', supporting_information: '',
   });
   const [plants, setPlants] = useState([]);
@@ -173,6 +174,42 @@ export default function KnowledgeSubmissionForm() {
               rows={2}
               className="w-full px-3 py-2.5 bg-stone-50 border border-stone-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none resize-none"
               placeholder="Any cultural or ceremonial significance..." />
+          </div>
+        </section>
+
+        <section>
+          <h3 className="font-semibold text-stone-800 mb-1 pb-2 border-b border-stone-100">Dosage — How Much & How to Take</h3>
+          <p className="text-xs text-stone-500 mb-4">
+            Record exactly how the preparation is traditionally taken. Reviewers cannot verify a submission
+            without clear dosage — for potent plants, state that practitioner supervision is required.
+          </p>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-stone-700 mb-1">Amount per intake</label>
+              <input type="text" value={form.dosage} onChange={e => setForm({...form, dosage: e.target.value})}
+                placeholder="e.g. 1 teacup (~150 ml)"
+                className="w-full px-3 py-2.5 bg-stone-50 border border-stone-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-stone-700 mb-1">How often</label>
+              <input type="text" value={form.frequency} onChange={e => setForm({...form, frequency: e.target.value})}
+                placeholder="e.g. Twice daily"
+                className="w-full px-3 py-2.5 bg-stone-50 border border-stone-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none" />
+            </div>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-4 mt-4">
+            <div>
+              <label className="block text-sm font-medium text-stone-700 mb-1">How long</label>
+              <input type="text" value={form.duration} onChange={e => setForm({...form, duration: e.target.value})}
+                placeholder="e.g. For 3 days"
+                className="w-full px-3 py-2.5 bg-stone-50 border border-stone-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-stone-700 mb-1">How to take it</label>
+              <input type="text" value={form.administration} onChange={e => setForm({...form, administration: e.target.value})}
+                placeholder="e.g. Drink warm after food"
+                className="w-full px-3 py-2.5 bg-stone-50 border border-stone-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none" />
+            </div>
           </div>
         </section>
 

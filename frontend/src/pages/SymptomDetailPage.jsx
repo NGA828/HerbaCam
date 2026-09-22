@@ -14,6 +14,7 @@ import {
   Leaf
 } from 'lucide-react';
 import { Reveal, CountUp } from '../components/ui/motion';
+import DosageInfo from '../components/DosageInfo';
 import { plantImage, withImageFallback } from '../utils/images';
 
 /**
@@ -186,6 +187,7 @@ export default function SymptomDetailPage() {
                           <p className="text-stone-600 leading-relaxed line-clamp-3">
                             {use.description}
                           </p>
+                          <DosageInfo use={use} compact />
                           
                           <div className="mt-4 flex flex-wrap gap-2">
                             {use.part_display && (
@@ -233,11 +235,11 @@ export default function SymptomDetailPage() {
                   >
                     <div className="aspect-[4/3] overflow-hidden bg-stone-100 relative">
                       <img
-                        src={plantImage({ image: use.image || '', scientific_name: use.plant_name })}
-                        alt={use.plant_name}
+                        src={plantImage({ image: use.plant_image || '', scientific_name: use.plant_name, common_name: use.plant_common_name || '' })}
+                        alt={use.plant_common_name || use.plant_name}
                         className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
                         loading="lazy"
-                        onError={withImageFallback({ scientific_name: use.plant_name })}
+                        onError={withImageFallback({ scientific_name: use.plant_name, common_name: use.plant_common_name || '' })}
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                     </div>

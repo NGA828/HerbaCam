@@ -15,6 +15,7 @@ import {
   CheckCircle2 
 } from 'lucide-react';
 import { plantImage } from '../utils/images';
+import DosageInfo from '../components/DosageInfo';
 
 export default function SymptomsPage() {
   const { toast } = useToast();
@@ -243,6 +244,7 @@ export default function SymptomsPage() {
                               <p className="text-stone-600 mt-3 leading-relaxed line-clamp-2">
                                 {item.traditional_use}
                               </p>
+                              <DosageInfo use={item} compact />
                               
                               {/* Metadata Badges */}
                               <div className="flex flex-wrap gap-2 mt-4">
