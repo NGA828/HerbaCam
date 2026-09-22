@@ -43,18 +43,83 @@ SEED_IMAGE_DIRS = [
     os.path.join(settings.BASE_DIR.parent, 'frontend', 'src', 'assets', 'plants'),
 ]
 
-# Botanical artwork shipped with the frontend. Reused cyclically so every
-# demo plant has a real image to render instead of a broken <img>.
-PLANT_ARTWORK = [
-    'african-basil.jpg',
-    'alstonia.jpg',
-    'bitter-leaf.jpg',
-    'kola-nut.jpg',
-    'moringa.jpg',
-    'neem.jpg',
-    'prunus-africana.jpg',
-    'rauvolfia.jpg',
-]
+# Real reference photographs shipped with the frontend — exactly one per demo
+# plant. Each filename MUST depict the mapped species; images are never
+# reused across species so the photo always matches the plant name.
+# All 32 species are present in Cameroon with documented medicinal value.
+PLANT_IMAGES = {
+    'Azadirachta indica': 'neem.jpg',
+    'Moringa oleifera': 'moringa.jpg',
+    'Prunus africana': 'prunus-africana.jpg',
+    'Vernonia amygdalina': 'bitter-leaf.jpg',
+    'Cola acuminata': 'kola-nut.jpg',
+    'Alstonia boonei': 'alstonia.jpg',
+    'Ocimum gratissimum': 'african-basil.jpg',
+    'Rauvolfia vomitoria': 'rauvolfia.jpg',
+    'Zingiber officinale': 'ginger.jpg',
+    'Curcuma longa': 'turmeric.jpg',
+    'Allium sativum': 'garlic.jpg',
+    'Aloe vera': 'aloe-vera.jpg',
+    'Carica papaya': 'papaya.jpg',
+    'Mangifera indica': 'mango.jpg',
+    'Psidium guajava': 'guava.jpg',
+    'Cymbopogon citratus': 'lemongrass.jpg',
+    'Khaya senegalensis': 'khaya.jpg',
+    'Nauclea latifolia': 'african-peach.jpg',
+    'Piper guineense': 'ashanti-pepper.jpg',
+    'Tetrapleura tetraptera': 'prekese.jpg',
+    'Xylopia aethiopica': 'ethiopian-pepper.jpg',
+    'Garcinia kola': 'bitter-kola.jpg',
+    'Picralima nitida': 'akuamma.jpg',
+    'Enantia chlorantha': 'yellow-wood.jpg',
+    'Voacanga africana': 'voacanga.jpg',
+    'Annona muricata': 'soursop.jpg',
+    'Senna alata': 'candle-bush.jpg',
+    'Ageratum conyzoides': 'goat-weed.jpg',
+    'Chromolaena odorata': 'siam-weed.jpg',
+    'Securidaca longipedunculata': 'violet-tree.jpg',
+    'Anogeissus leiocarpa': 'african-birch.jpg',
+    'Zanthoxylum gilletii': 'satinwood.jpg',
+}
+
+# Photo sources for attribution (educational fair-use demo dataset).
+PLANT_IMAGE_CREDITS = {
+    'Azadirachta indica': 'Reference photo of Azadirachta indica (neem)',
+    'Moringa oleifera': 'Reference photo of Moringa oleifera (moringa)',
+    'Prunus africana': 'Reference photo of Prunus africana (African cherry)',
+    'Vernonia amygdalina': 'Reference photo of Vernonia amygdalina (bitter leaf)',
+    'Cola acuminata': 'Reference photo of Cola acuminata (kola nut)',
+    'Alstonia boonei': 'Reference photo of Alstonia boonei (stool wood)',
+    'Ocimum gratissimum': 'Reference photo of Ocimum gratissimum (African basil)',
+    'Rauvolfia vomitoria': 'Reference photo of Rauvolfia vomitoria',
+    'Zingiber officinale': 'Reference photo of Zingiber officinale (ginger)',
+    'Curcuma longa': 'Reference photo of Curcuma longa (turmeric) — toptropicals.com',
+    'Allium sativum': 'Reference photo of Allium sativum (garlic) — dearplants.com',
+    'Aloe vera': 'Reference photo of Aloe vera',
+    'Carica papaya': 'Reference photo of Carica papaya (papaya) — britannica.com',
+    'Mangifera indica': 'Reference photo of Mangifera indica (mango)',
+    'Psidium guajava': 'Reference photo of Psidium guajava (guava) — toptropicals.com',
+    'Cymbopogon citratus': 'Reference photo of Cymbopogon citratus (lemongrass)',
+    'Khaya senegalensis': 'Reference photo of Khaya senegalensis (African mahogany)',
+    'Nauclea latifolia': 'Reference photo of Nauclea latifolia (African peach) — toptropicals.com',
+    'Piper guineense': 'Reference photo of Piper guineense (Ashanti pepper) — nmppdb.com.ng',
+    'Tetrapleura tetraptera': 'Reference photo of Tetrapleura tetraptera (prekese) fruit',
+    'Xylopia aethiopica': 'Reference photo of Xylopia aethiopica (Ethiopian pepper) — globalfoodbook.com',
+    'Garcinia kola': 'Reference photo of Garcinia kola (bitter kola) fruit — datelinehealthafrica.org',
+    'Picralima nitida': 'Reference photo of Picralima nitida (akuamma) fruit — electricveg.com',
+    'Enantia chlorantha': 'Reference photo of Enantia chlorantha (African yellow wood) — nmppdb.com.ng',
+    'Voacanga africana': 'Reference photo of Voacanga africana — toptropicals.com',
+    'Annona muricata': 'Reference photo of Annona muricata (soursop)',
+    'Senna alata': 'Reference photo of Senna alata (candle bush) flowers',
+    'Ageratum conyzoides': 'Reference photo of Ageratum conyzoides flowers',
+    'Chromolaena odorata': 'Reference photo of Chromolaena odorata — J. B. Friday, flickr.com',
+    'Securidaca longipedunculata': 'Reference photo of Securidaca longipedunculata — pza.sanbi.org',
+    'Anogeissus leiocarpa': 'Reference photo of Anogeissus leiocarpa — pfaf.org',
+    'Zanthoxylum gilletii': 'Reference photo of Zanthoxylum gilletii — plantuse.plantnet.org (PROTA)',
+}
+
+# Pool of real plant photos used for article cover images.
+PLANT_ARTWORK = list(PLANT_IMAGES.values())
 
 RANDOM = random.Random(20260828)  # deterministic demo data
 
@@ -700,12 +765,25 @@ class Command(BaseCommand):
                     'genus': data['genus'],
                     'description': data['description'],
                     'habitat': data['habitat'],
-                    'image_credit': 'Ancestor demo artwork — generated illustration, not a photograph',
+                    'image_credit': PLANT_IMAGE_CREDITS.get(
+                        data['scientific_name'],
+                        'Reference photo of %s' % data['scientific_name'],
+                    ),
                     'is_published': True,
                 },
             )
-            if created or plant_image_missing(plant):
-                set_plant_image(plant, PLANT_ARTWORK[index % len(PLANT_ARTWORK)])
+            # Each plant gets its OWN species photo — never a cycled image.
+            # Also repair plants whose stored image file is missing OR whose
+            # filename does not match the species mapping (legacy mismatch).
+            expected = PLANT_IMAGES.get(data['scientific_name'])
+            current = (plant.image.name or '').rsplit('/', 1)[-1] if plant.image else ''
+            if created or plant_image_missing(plant) or (expected and current != expected):
+                if expected:
+                    set_plant_image(plant, expected)
+                    plant.image_credit = PLANT_IMAGE_CREDITS.get(
+                        data['scientific_name'], plant.image_credit
+                    )
+                    plant.save(update_fields=['image_credit'])
 
             for name, language, region_name in data['local_names']:
                 PlantLocalName.objects.get_or_create(
@@ -1720,7 +1798,11 @@ class Command(BaseCommand):
         for index in range(42):
             user = pool[index % len(pool)]
             plant = plant_list[index % len(plant_list)]
-            artwork_name = PLANT_ARTWORK[index % len(PLANT_ARTWORK)]
+            # Demo upload shows the SAME species the result claims — otherwise
+            # the history would teach users that wrong photos are acceptable.
+            artwork_name = PLANT_IMAGES.get(
+                plant.scientific_name, PLANT_ARTWORK[index % len(PLANT_ARTWORK)]
+            )
             data = read_artwork(artwork_name)
             if not data:
                 continue
