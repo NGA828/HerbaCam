@@ -2,8 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
-import { Menu, X, LayoutDashboard, LogOut } from 'lucide-react';
-import { LogoMark } from './Logo';
+import { Menu, X, LayoutDashboard, LogOut, Leaf } from 'lucide-react';
 
 export default function Navbar() {
   const { user, logout } = useAuth();

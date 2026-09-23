@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import L from 'leaflet';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
@@ -13,7 +13,8 @@ import {
   Globe,
   Sprout,
   X,
-  ChevronRight
+  ChevronRight,
+  Navigation
 } from 'lucide-react';
 import { plantImage, PLANT_PLACEHOLDER } from '../utils/images';
 
@@ -87,6 +88,43 @@ export default function MapPage() {
   const [selectedRegion, setSelectedRegion] = useState(null);
   const [viewMode, setViewMode] = useState('regions');
   const [loading, setLoading] = useState(true);
+  // "Use my location" — resolves the browser position against the platform's
+  // own region coordinates (see /api/geography/locate/).
+  const [locating, setLocating] = useState(false);
+  const [nearby, setNearby] = useState(null);
+  const mapRef = useRef(null);
+
+  function locateMe() {
+    if (!navigator.geolocation) {
+      toast.warning('Location is unavailable', 'This browser does not expose a geolocation API.');
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude: lat, longitude: lng } = position.coords;
+        try {
+          const res = await geographyAPI.locate(lat, lng);
+          setNearby({ ...res.data, lat, lng });
+          setSelectedRegion(res.data.region.id);
+          mapRef.current?.flyTo([lat, lng], 7, { duration: 1.1 });
+          toast.success(
+            'Centred on your location',
+            `${res.data.region.name} is the nearest documented region, about ${res.data.distance_km} km away.`,
+          );
+        } catch {
+          toast.error('Could not resolve that location', 'The nearest-region lookup failed. Try again in a moment.');
+        } finally {
+          setLocating(false);
+        }
+      },
+      () => {
+        setLocating(false);
+        toast.warning('Location not shared', 'Allow camera and location access, or pick a region from the list.');
+      },
+      { timeout: 8000, maximumAge: 300000 },
+    );
+  }
 
   useEffect(() => {
     setLoading(true);
@@ -213,8 +251,40 @@ export default function MapPage() {
                 <Sprout className="w-4 h-4" /> Plants
               </button>
             </div>
+
+            <button
+              onClick={locateMe}
+              disabled={locating}
+              className="inline-flex items-center gap-2 rounded-lg bg-white/90 px-4 py-2.5 text-sm font-semibold text-stone-700 shadow-sm ring-1 ring-black/5 backdrop-blur-sm transition hover:bg-white disabled:opacity-60"
+            >
+              <Navigation className={`w-4 h-4 ${locating ? 'animate-pulse' : ''}`} />
+              {locating ? 'Locating…' : 'Use my location'}
+            </button>
           </div>
         </Reveal>
+
+        {nearby && (
+          <Reveal className="mb-4 block">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50/70 px-5 py-3.5">
+              <p className="text-sm text-emerald-900">
+                <span className="font-bold">{nearby.region.name}</span> is the region nearest to you
+                <span className="text-emerald-700"> · about {nearby.distance_km} km away</span>
+                <span className="text-emerald-700"> · {nearby.plant_count} plant{nearby.plant_count === 1 ? '' : 's'} documented there</span>
+                {!nearby.in_cameroon && (
+                  <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
+                    outside Cameroon — showing the closest region
+                  </span>
+                )}
+              </p>
+              <button
+                onClick={() => setNearby(null)}
+                className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-emerald-800 transition hover:bg-emerald-100"
+              >
+                <X className="h-3.5 w-3.5" /> Clear
+              </button>
+            </div>
+          </Reveal>
+        )}
 
         <div className="grid lg:grid-cols-12 gap-6 items-start">
 
@@ -231,6 +301,7 @@ export default function MapPage() {
                   </div>
                 ) : (
                   <MapContainer
+                    ref={mapRef}
                     center={CAMEROON_CENTER}
                     zoom={CAMEROON_ZOOM}
                     style={{ height: '100%', width: '100%' }}

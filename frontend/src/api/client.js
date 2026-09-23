@@ -160,6 +160,7 @@ export const geographyAPI = {
   deleteRegion: (id) => api.delete(`/geography/regions/${id}/`),
   createDivision: (data) => api.post('/geography/divisions/', data),
   createCommunity: (data) => api.post('/geography/communities/', data),
+  locate: (lat, lng) => api.get('/geography/locate/', { params: { lat, lng } }),
 };
 
 // Articles API
@@ -209,6 +210,48 @@ export const usersAPI = {
   list: (params) => api.get('/auth/users/', { params }),
   detail: (id) => api.get(`/auth/users/${id}/`),
   update: (id, data) => api.patch(`/auth/users/${id}/`, data),
+};
+
+// Consultations API - availability, bookings, video rooms and messages
+export const consultationsAPI = {
+  availability: (params) => api.get('/consultations/availability/', { params }),
+  createAvailability: (data) => api.post('/consultations/availability/', data),
+  availabilityDetail: (id) => api.get(`/consultations/availability/${id}/`),
+  updateAvailability: (id, data) => api.patch(`/consultations/availability/${id}/`, data),
+  deleteAvailability: (id) => api.delete(`/consultations/availability/${id}/`),
+  slots: (params) => api.get('/consultations/slots/', { params }),
+  appointments: (params) => api.get('/consultations/appointments/', { params }),
+  book: (data) => api.post('/consultations/appointments/book/', data),
+  appointmentDetail: (id) => api.get(`/consultations/appointments/${id}/`),
+  updateAppointment: (id, data) => api.patch(`/consultations/appointments/${id}/`, data),
+  setAppointmentStatus: (id, data) => api.post(`/consultations/appointments/${id}/status/`, data),
+  startConsultation: (id) => api.post(`/consultations/appointments/${id}/start/`),
+  conversations: () => api.get('/consultations/conversations/'),
+  messages: (id, params) => api.get(`/consultations/conversations/${id}/messages/`, { params }),
+  sendMessage: (id, data) => api.post(`/consultations/conversations/${id}/messages/`, data),
+  signals: (id, params) => api.get(`/consultations/conversations/${id}/signal/`, { params }),
+  sendSignal: (id, data) => api.post(`/consultations/conversations/${id}/signal/`, data),
+  markThreadRead: (id) => api.post(`/consultations/conversations/${id}/read/`),
+  stats: () => api.get('/consultations/stats/'),
+};
+
+// Assistant API - grounded "chat with AI"
+export const assistantAPI = {
+  sessions: () => api.get('/assistant/'),
+  createSession: (data) => api.post('/assistant/', data),
+  ask: (data) => api.post('/assistant/ask/', data),
+  sessionDetail: (id) => api.get(`/assistant/${id}/`),
+  deleteSession: (id) => api.delete(`/assistant/${id}/`),
+  sessionMessages: (id) => api.get(`/assistant/${id}/messages/`),
+  archiveSession: (id, data) => api.patch(`/assistant/${id}/archive/`, data),
+};
+
+// Feedback API - "Send feedback" and the administrator triage queue
+export const feedbackAPI = {
+  queue: (params) => api.get('/feedback/', { params }),
+  send: (data) => api.post('/feedback/send/', data),
+  detail: (id) => api.get(`/feedback/${id}/`),
+  update: (id, data) => api.patch(`/feedback/${id}/`, data),
 };
 
 // Practitioners API

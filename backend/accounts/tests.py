@@ -176,10 +176,12 @@ class PermissionTest(APITestCase):
         )
 
     def test_user_cannot_manage_users(self):
+        # The endpoint is IsAdministrator-only, so a plain user is refused at
+        # the door. Asserting 200-with-an-empty-list here would have passed
+        # even if the queryset leaked every account.
         self.client.force_authenticate(user=self.user)
         res = self.client.get('/api/auth/users/')
-        self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(res.data.get('results', res.data)), 0)
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_admin_can_manage_users(self):
         self.client.force_authenticate(user=self.admin)

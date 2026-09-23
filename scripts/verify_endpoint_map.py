@@ -29,6 +29,7 @@ GENERIC_METHODS = {
     'ListCreateAPIView': ['GET', 'POST'],
     'RetrieveAPIView': ['GET'],
     'RetrieveUpdateAPIView': ['GET', 'PUT', 'PATCH'],
+    'RetrieveDestroyAPIView': ['GET', 'DELETE'],
     'RetrieveUpdateDestroyAPIView': ['GET', 'PUT', 'PATCH', 'DELETE'],
     'CreateAPIView': ['POST'],
     'UpdateAPIView': ['PUT', 'PATCH'],

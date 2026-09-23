@@ -26,8 +26,9 @@ Django is the central controller. The AI never directly accesses the database. T
 
 ## Tech Stack
 
-- **Frontend**: React 19, Vite, Tailwind CSS v4, React Router, Axios, Recharts, Leaflet, Lucide React
+- **Frontend**: React 19, Vite, Tailwind CSS v4, React Router v7, Axios, Recharts, Leaflet, Lucide React
 - **Backend**: Python, Django 4.2 LTS, Django REST Framework, SimpleJWT, django-cors-headers
+- **Realtime**: browser WebRTC (peer-to-peer media) with Django relaying the handshake over the message thread
 - **Database**: MySQL 5.7+ / MariaDB 10.4+ (default for this project) / SQLite (fallback for local dev when no MySQL is configured)
 - **AI**: OpenRouter API with vision-capable models
 
@@ -97,7 +98,11 @@ accounts so notifications, reviews and audit history have realistic actors.
 | Knowledge submissions | 29 | Every workflow status, incl. rejected and in-revision |
 | AI identifications | 42 | COMPLETED / PROCESSING / FAILED |
 | Favorites | 45 | Spread across users |
-| Notifications | 80 | Submission, review and identification events |
+| Notifications | 80 | Submission, review, identification, booking and message events |
+| Availability windows | ~14 | Future-dated per expert, about half booked |
+| Appointments / thread messages | 7 / 20 | Every consultation status represented |
+| Feedback notes | 8 | Across 5 categories, some answered and resolved |
+| Assistant conversations | 12 | Demo transcripts (not live model output) |
 | Risk assessments | 42 | LOW / MODERATE / HIGH with component scores |
 | Audit log entries | 148+ | Logins, reviews, admin actions |
 | Regions / divisions / communities | 10 / 40 / 120 | The real Cameroonian administrative tree |
@@ -162,6 +167,24 @@ VITE_API_URL=/api
 - View analytics and preservation risk
 - Monitor audit logs
 - Manage articles and content
+- Oversee every consultation and its utilisation stats
+- Triage user feedback and reply to it (the author is notified)
+
+### Consultations between patients and specialists
+- Specialists publish availability windows; overlapping or past windows are refused
+- Patients book an open window and state what they want to discuss
+- Specialists confirm, complete (with a closing note) or mark a no-show
+- Cancelling or completing returns the window to the pool automatically
+- Each appointment carries one messaging thread, visible only to its two participants
+- The thread doubles as the WebRTC signalling channel, so a video consultation
+  runs peer-to-peer with no third-party room service
+- Administrators see all consultations and platform-wide booking stats
+
+### AI assistant
+- Multi-turn chat grounded in an extract Django assembles from verified records
+- Every answer links the plants it cited; dosage text is only ever copied from a
+  record, never generated
+- A failed provider call rolls the turn back instead of leaving a dangling question
 
 ## Knowledge Verification Workflow
 
@@ -200,11 +223,17 @@ Two checks keep that map honest — both are plain-Python and run anywhere:
 
 ```bash
 python scripts/verify_endpoint_map.py --markdown docs/API_ENDPOINT_MAP.md
-# backend endpoints : 82 / frontend calls : 82 / matched 1:1 : 82
+# backend endpoints : 113 / frontend calls : 113 / matched 1:1 : 113
 # orphan endpoints  : 0   / unmatched calls : 0
 
 python scripts/smoke_endpoints.py          # logs in as every role and calls every route
+python scripts/e2e_consultations.py        # walks the whole booking → room → message flow
+cd frontend && npm run smoke:ssr           # renders every page under Vite SSR
 ```
+
+`npm run smoke:ssr` exists because a bundler will not catch a free identifier
+(`<Leaf>` with no import is not a module-resolution error), so the build passes
+and the page white-screens. The SSR harness actually executes the components.
 
 Highlights:
 
@@ -246,6 +275,25 @@ Highlights:
 | /api/geography/regions/:id/ | GET/PATCH/DELETE | Single region |
 | /api/practitioners/profile/ · /api/practitioners/list/ | GET/PATCH · GET | Practitioner profiles |
 | /api/audit/ | GET | Audit trail (admin) |
+| /api/consultations/availability/ | GET/POST | Specialist's own windows |
+| /api/consultations/availability/:id/ | GET/PATCH/DELETE | One window (owner or admin) |
+| /api/consultations/slots/ | GET | Open windows patients may book |
+| /api/consultations/appointments/ | GET | Role-scoped appointments |
+| /api/consultations/appointments/book/ | POST | Book a window (row-locked) |
+| /api/consultations/appointments/:id/ | GET/PATCH | Detail / reason and notes |
+| /api/consultations/appointments/:id/status/ | POST | confirm · cancel · complete · no_show |
+| /api/consultations/appointments/:id/start/ | POST | Join the room, returns room id |
+| /api/consultations/conversations/ | GET | Threads the caller is part of |
+| /api/consultations/conversations/:id/messages/ | GET/POST | Read thread / post a line |
+| /api/consultations/conversations/:id/signal/ | GET/POST | WebRTC offer/answer/ICE relay |
+| /api/consultations/conversations/:id/read/ | POST | Mark the thread read |
+| /api/consultations/stats/ | GET | Consultation oversight (admin) |
+| /api/assistant/ | GET/POST | Chat sessions |
+| /api/assistant/ask/ | POST | One grounded turn (throttled 60/hour) |
+| /api/assistant/:id/ · /messages/ · /archive/ | GET/DELETE · GET · PATCH | Transcript control |
+| /api/feedback/send/ | POST | Any user sends feedback |
+| /api/feedback/ · /:id/ | GET · GET/PATCH | Triage queue and replies (admin) |
+| /api/geography/locate/?lat=&lng= | GET | Nearest region for browser coordinates |
 
 ## Interface conventions
 

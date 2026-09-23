@@ -234,7 +234,7 @@ export function PlantsManagement() {
                             src={plantImage(p)}
                             alt={p.common_name || p.scientific_name}
                             className="h-full w-full object-cover"
-                            onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = generatedFor(p); }}
+                            onError={withImageFallback(p)}
                           />
                         </div>
                         <div className="min-w-0">

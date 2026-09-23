@@ -56,6 +56,9 @@ INSTALLED_APPS = [
     'audit',
     'analytics',
     'preservation',
+    'consultations',
+    'assistant',
+    'feedback',
 ]
 
 MIDDLEWARE = [
@@ -180,6 +183,9 @@ REST_FRAMEWORK = {
         'anon': '1000/hour',
         'user': '5000/hour',
         'ai_identification': '30/hour',
+        # Assistant turns are a model call each; 60/hour allows a real
+        # conversation without letting one account run the bill up.
+        'ai_chat': '60/hour',
     },
 }
 
