@@ -96,16 +96,19 @@ Django REST API (Port 8000)
    - View submission status
    - Edit rejected submissions
 
-3. **EXPERT** - Knowledge reviewer
+3. **EXPERT** - Knowledge reviewer and content curator
    - Review pending submissions
    - Approve/reject knowledge
    - Manage evidence and safety records
+   - Manage plant information (create, edit, publish, withdraw)
+   - Manage articles (draft, publish, withdraw)
    - View preservation analytics
 
 4. **ADMIN** - System administrator
    - Full system access
    - User management
-   - Content moderation
+   - Content moderation, including the shared symptom vocabulary that experts
+     read but cannot rewrite
    - System configuration
 
 ### Security Features
@@ -293,7 +296,7 @@ All pages are fully responsive:
 
 ## 🧪 Testing
 
-**86 backend tests**, all passing:
+**111 backend tests**, all passing:
 
 | Suite | Covers |
 | --- | --- |
@@ -302,12 +305,17 @@ All pages are fully responsive:
 | `assistant` (17) | Grounding, citation ids, unpublished plants excluded, prompt assembly, provider failure paths, transcript scoping |
 | `feedback` (8) | Submission, queue restriction, self-resolution refusal, notify-once reply, rating bounds |
 | `geography` (6) | Nearest-region resolution, out-of-country handling, malformed coordinates |
+| `plants` (11) | Expert/admin plant curation, practitioner and patient denial, audit trail, drafts never published, public catalogue unaffected |
+| `articles` (9) | Expert authorship, publish/withdraw with timestamp, delete rights, draft invisibility to readers |
+| `symptoms` (5) | The deliberately narrower vocabulary: experts read it, only administrators rename it |
 
 Beyond `manage.py test`:
 
 - `scripts/verify_endpoint_map.py` — 113 backend routes ↔ 113 axios calls, no orphans
 - `scripts/smoke_endpoints.py` — every route called as every role against a live server
 - `scripts/e2e_consultations.py` — 27-step booking → confirm → join → signal → message → complete flow
+- `scripts/e2e_content_curation.py` — live proof of the plant/article curation grant (expert yes,
+  practitioner/patient no, drafts invisible, symptom vocabulary admin-only); cleans up after itself
 - `frontend/scripts/ssr-smoke.mjs` (`npm run smoke:ssr`) — renders every page
   component under SSR: 32 render clean, and `MapPage` is skipped because leaflet
   touches `window` at import time (a harness limitation, not a bug)
@@ -527,24 +535,25 @@ Potential additions:
 
 ## 📊 Project Statistics
 
-- **Lines of Code**: ~20,700 (9,720 backend / 11,042 frontend)
+- **Lines of Code**: ~21,050 (9,995 backend / 11,053 frontend)
 - **Backend Apps**: 17
 - **Database Models**: 31
 - **API Endpoints**: 113 (each matched 1:1 to an axios binding)
 - **Frontend Pages**: 26 modules, 33 page components (all SSR-verified)
-- **Tests**: 86 backend tests, all passing
+- **Tests**: 111 backend tests, all passing
 - **Seed Data**: 32 plants, 32 symptoms, 109 traditional uses
 
 ## 🏆 Key Achievements
 
 ✅ Every use case in the ANCESTOR diagram implemented and reachable
+✅ Specialists hold the plant and article rights the diagram assigns them; administrators keep theirs
 ✅ Production-ready authentication and authorization
 ✅ AI-powered plant identification with confidence scoring
 ✅ Comprehensive knowledge verification workflow
 ✅ Preservation risk analysis with 5-factor scoring
 ✅ Beautiful, responsive UI with modern design
 ✅ Peer-to-peer video consultations with no third-party room service
-✅ 86 passing backend tests plus endpoint-map, role-smoke, E2E and SSR render checks
+✅ 111 passing backend tests plus endpoint-map, role-smoke, E2E and SSR render checks
 ✅ Complete API documentation
 ✅ Demo data with realistic examples
 ✅ Security best practices implemented

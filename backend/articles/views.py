@@ -1,15 +1,8 @@
 from django.utils import timezone
 from rest_framework import generics, permissions
-from accounts.permissions import IsStaffOrReadOnly
+from accounts.permissions import IsContentCurator
 from .models import Article, ArticleCategory
 from .serializers import ArticleListSerializer, ArticleDetailSerializer, ArticleCategorySerializer, ArticleAdminSerializer
-
-
-class IsAdminOrReadOnly(permissions.BasePermission):
-    def has_permission(self, request, view):
-        if request.method in permissions.SAFE_METHODS:
-            return True
-        return request.user.is_authenticated and (request.user.is_admin_role or request.user.is_superuser)
 
 
 class ArticleListView(generics.ListAPIView):
@@ -42,8 +35,9 @@ class ArticleDetailView(generics.RetrieveAPIView):
 
 
 class ArticleAdminListView(generics.ListCreateAPIView):
+    """Curators (expert/admin): list and compose articles."""
     serializer_class = ArticleAdminSerializer
-    permission_classes = [IsStaffOrReadOnly]
+    permission_classes = [IsContentCurator]
     queryset = Article.objects.all()
 
     def perform_create(self, serializer):
@@ -51,11 +45,12 @@ class ArticleAdminListView(generics.ListCreateAPIView):
 
 
 class ArticleAdminDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """Curators (expert/admin): edit, publish or withdraw one article."""
 
     # The client edits with PATCH; PUT (full replacement) is not offered.
     http_method_names = ['get', 'head', 'options', 'patch', 'delete']
     serializer_class = ArticleAdminSerializer
-    permission_classes = [IsStaffOrReadOnly]
+    permission_classes = [IsContentCurator]
     queryset = Article.objects.all()
 
     def perform_update(self, serializer):

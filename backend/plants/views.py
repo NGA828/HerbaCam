@@ -6,15 +6,8 @@ from .serializers import (
     PlantListSerializer, PlantDetailSerializer,
     PlantLocalNameSerializer, PlantPartSerializer, PlantAdminSerializer
 )
-from accounts.permissions import IsStaffOrReadOnly
+from accounts.permissions import IsContentCurator
 from audit.services import log_action
-
-
-class IsAdminOrReadOnly(permissions.BasePermission):
-    def has_permission(self, request, view):
-        if request.method in permissions.SAFE_METHODS:
-            return True
-        return request.user.is_authenticated and (request.user.is_admin_role or request.user.is_superuser)
 
 
 class PlantListView(generics.ListAPIView):
@@ -60,9 +53,9 @@ class PlantDetailView(generics.RetrieveAPIView):
 
 
 class PlantAdminListView(generics.ListCreateAPIView):
-    """Admin: manage plants."""
+    """Curators (expert/admin): manage plants."""
     serializer_class = PlantAdminSerializer
-    permission_classes = [IsStaffOrReadOnly]
+    permission_classes = [IsContentCurator]
     queryset = Plant.objects.all()
 
     def perform_create(self, serializer):
@@ -73,12 +66,12 @@ class PlantAdminListView(generics.ListCreateAPIView):
 
 
 class PlantAdminDetailView(generics.RetrieveUpdateDestroyAPIView):
-    """Admin: manage individual plant."""
+    """Curators (expert/admin): manage an individual plant."""
 
     # The client edits with PATCH; PUT (full replacement) is not offered.
     http_method_names = ['get', 'head', 'options', 'patch', 'delete']
     serializer_class = PlantAdminSerializer
-    permission_classes = [IsStaffOrReadOnly]
+    permission_classes = [IsContentCurator]
     queryset = Plant.objects.all()
 
     def perform_update(self, serializer):

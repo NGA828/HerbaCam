@@ -39,6 +39,8 @@ const navItems = {
     { path: '/expert/dashboard', label: 'Dashboard', icon: Home },
     { path: '/expert/reviews', label: 'Pending Reviews', icon: ClipboardCheck },
     { path: '/expert/knowledge', label: 'Knowledge', icon: FileText },
+    { path: '/expert/plants', label: 'Plant Library', icon: Leaf },
+    { path: '/expert/articles', label: 'Articles', icon: BookOpen },
     { path: '/expert/evidence', label: 'Evidence', icon: BarChart3 },
     { path: '/expert/safety', label: 'Safety', icon: Shield },
     { path: '/expert/preservation', label: 'Preservation', icon: AlertTriangle },

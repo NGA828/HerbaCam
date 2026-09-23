@@ -160,10 +160,14 @@ VITE_API_URL=/api
 - Approve, reject, or request revisions
 - Manage evidence records
 - Manage safety information
+- Manage plant information — add a species, edit or publish one, withdraw it
+- Manage articles for the public reading room (drafts stay invisible to readers)
 
 ### For Administrators
 - Manage users and roles
-- Manage plants, symptoms, and knowledge
+- Manage plants, symptoms, and knowledge — plant and article curation is shared
+  with experts, but the symptom vocabulary is administrator-only, because
+  renaming a symptom relabels every contribution that already matched on it
 - View analytics and preservation risk
 - Monitor audit logs
 - Manage articles and content
@@ -219,7 +223,9 @@ The full, generated **API ↔ frontend map** lives in
 [`docs/API_ENDPOINT_MAP.md`](docs/API_ENDPOINT_MAP.md): every backend route,
 the axios binding that calls it, and the page that uses it.
 
-Two checks keep that map honest — both are plain-Python and run anywhere:
+Four plain-Python checks and one Node check keep that map honest. Three of them
+need a running server — start both dev servers first, since the Vite proxy is
+what puts `/api` in reach:
 
 ```bash
 python scripts/verify_endpoint_map.py --markdown docs/API_ENDPOINT_MAP.md
@@ -228,6 +234,7 @@ python scripts/verify_endpoint_map.py --markdown docs/API_ENDPOINT_MAP.md
 
 python scripts/smoke_endpoints.py          # logs in as every role and calls every route
 python scripts/e2e_consultations.py        # walks the whole booking → room → message flow
+python scripts/e2e_content_curation.py     # proves who may write plants and articles, and who may not
 cd frontend && npm run smoke:ssr           # renders every page under Vite SSR
 ```
 
@@ -247,8 +254,8 @@ Highlights:
 | /api/plants/ | GET | List published plants |
 | /api/plants/search/ | GET | Filter by region, habitat, family, part, evidence |
 | /api/plants/:id/ | GET | Plant detail |
-| /api/plants/admin/ | GET/POST | Curator plant management |
-| /api/plants/admin/:id/ | GET/PATCH/DELETE | Curator plant management |
+| /api/plants/admin/ | GET/POST | Plant management — expert or admin |
+| /api/plants/admin/:id/ | GET/PATCH/DELETE | Plant management — expert or admin |
 | /api/symptoms/ · /api/symptoms/:id/ | GET | Symptom index and detail |
 | /api/symptoms/search/?q= | GET | Symptom search |
 | /api/symptoms/admin/ · /api/symptoms/admin/:id/ | GET/POST · GET/PATCH/DELETE | Curator symptom management |
@@ -266,7 +273,7 @@ Highlights:
 | /api/evidence/ · /api/evidence/create/ · /api/evidence/:id/update/ | GET · POST · PATCH | Evidence records |
 | /api/safety/ · /api/safety/create/ · /api/safety/:id/update/ | GET · POST · PATCH | Safety records |
 | /api/articles/ · /api/articles/:slug/ · /api/articles/categories/ | GET | Reading room |
-| /api/articles/admin/ · /api/articles/admin/:id/ | GET/POST · GET/PATCH/DELETE | Article management |
+| /api/articles/admin/ · /api/articles/admin/:id/ | GET/POST · GET/PATCH/DELETE | Article management — expert or admin |
 | /api/analytics/dashboard/ | GET | Role-aware platform statistics |
 | /api/analytics/favorites/ · /add/ · /remove/ · /check/:id/ | GET · POST · GET | Favorites |
 | /api/notifications/ · /unread-count/ · /:id/read/ · /mark-all-read/ | GET · POST | Notifications |

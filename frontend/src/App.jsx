@@ -134,6 +134,13 @@ function AppRoutes() {
         <Route path="/expert/preservation" element={<ProtectedRoute roles={['EXPERT', 'ADMIN']}><PreservationPage /></ProtectedRoute>} />
         <Route path="/expert/analytics" element={<ProtectedRoute roles={['EXPERT', 'ADMIN']}><ExpertAnalyticsPage /></ProtectedRoute>} />
         <Route path="/expert/knowledge" element={<ProtectedRoute roles={['EXPERT', 'ADMIN']}><KnowledgeManagement /></ProtectedRoute>} />
+        {/* The use-case diagram gives the specialized expert `manage plant
+           information` and `manage articles`, so both workspaces are mounted
+           here as well as under /admin/. */}
+        <Route path="/expert/plants" element={<ProtectedRoute roles={['EXPERT', 'ADMIN']}><PlantsManagement /></ProtectedRoute>} />
+        <Route path="/expert/plants/new" element={<ProtectedRoute roles={['EXPERT', 'ADMIN']}><PlantsManagement /></ProtectedRoute>} />
+        <Route path="/expert/plants/:id/edit" element={<ProtectedRoute roles={['EXPERT', 'ADMIN']}><PlantsManagement /></ProtectedRoute>} />
+        <Route path="/expert/articles" element={<ProtectedRoute roles={['EXPERT', 'ADMIN']}><ArticlesManagement /></ProtectedRoute>} />
         <Route path="/expert/notifications" element={<ProtectedRoute roles={['EXPERT', 'ADMIN']}><NotificationsPage /></ProtectedRoute>} />
         <Route path="/expert/profile" element={<ProtectedRoute roles={['EXPERT', 'ADMIN']}><ProfilePage /></ProtectedRoute>} />
         <Route path="/expert/desk" element={
