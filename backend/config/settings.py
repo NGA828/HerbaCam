@@ -213,7 +213,7 @@ AUTH_FALLBACK_HEADER_ENABLED = os.getenv(
 # provisioned here. It is a setting rather than a literal in a component so a
 # deployment can add one without rebuilding the frontend bundle.
 WEBRTC_ICE_SERVERS = json.loads(os.getenv('WEBRTC_ICE_SERVERS', '[]')) or [
-    {'urls': 'stun:stun.l.google.com:19908'},
+    {'urls': 'stun:stun.l.google.com:19302'},
 ]
 
 # OpenRouter API

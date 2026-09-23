@@ -5,8 +5,8 @@
  * problem without leaving the page. Administrators answer these from
  * /admin/feedback, and the author gets a notification when one is resolved.
  */
-import { useState } from 'react';
-import { MessageSquareWarning, Send, Star } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { GripVertical, MessageSquareWarning, Send, Star } from 'lucide-react';
 
 import { feedbackAPI } from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
@@ -21,6 +21,15 @@ const CATEGORIES = [
   ['OTHER', 'Something else'],
 ];
 
+function clampPosition(x, y) {
+  const width = window.innerWidth;
+  const height = window.innerHeight;
+  return {
+    x: Math.max(8, Math.min(x, width - 190)),
+    y: Math.max(8, Math.min(y, height - 56)),
+  };
+}
+
 export default function FeedbackWidget() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -29,6 +38,61 @@ export default function FeedbackWidget() {
   const [message, setMessage] = useState('');
   const [rating, setRating] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [position, setPosition] = useState(null);
+  const [dragging, setDragging] = useState(false);
+  const dragRef = useRef(null);
+  const movedRef = useRef(false);
+
+  function startDragging(event) {
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    dragRef.current = {
+      offsetX: event.clientX - rect.left,
+      offsetY: event.clientY - rect.top,
+    };
+    movedRef.current = false;
+    setDragging(true);
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    event.preventDefault();
+  }
+
+  const drag = useCallback((event) => {
+    if (!dragging || !dragRef.current) return;
+    const next = clampPosition(
+      event.clientX - dragRef.current.offsetX,
+      event.clientY - dragRef.current.offsetY,
+    );
+    if (Math.abs(next.x - (position?.x ?? next.x)) > 2 || Math.abs(next.y - (position?.y ?? next.y)) > 2) {
+      movedRef.current = true;
+    }
+    setPosition(next);
+  }, [dragging, position]);
+
+  const stopDragging = useCallback(() => {
+    dragRef.current = null;
+    setDragging(false);
+  }, []);
+
+  useEffect(() => {
+    if (!dragging) return undefined;
+    window.addEventListener('pointermove', drag);
+    window.addEventListener('pointerup', stopDragging);
+    return () => {
+      window.removeEventListener('pointermove', drag);
+      window.removeEventListener('pointerup', stopDragging);
+    };
+  }, [dragging, drag, stopDragging]);
+
+  useEffect(() => {
+    function keepInView() {
+      if (position) setPosition((current) => current && clampPosition(current.x, current.y));
+    }
+    window.addEventListener('resize', keepInView);
+    return () => window.removeEventListener('resize', keepInView);
+  }, [position]);
+
+  const widgetStyle = position ? { left: position.x, top: position.y } : undefined;
+  const panelAbove = !position || position.y > 430;
 
   // Sending feedback needs an account; guests get nothing floating at them.
   if (!user) return null;
@@ -62,10 +126,20 @@ export default function FeedbackWidget() {
     <>
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="fixed bottom-5 right-5 z-40 inline-flex items-center gap-2 rounded-full bg-emerald-700 px-4 py-3 text-sm font-semibold text-white shadow-lg transition hover:bg-emerald-800 active:scale-95"
+        onClick={() => {
+          if (!movedRef.current) setOpen((v) => !v);
+          movedRef.current = false;
+        }}
+        onPointerDown={startDragging}
+        onPointerMove={drag}
+        onPointerUp={stopDragging}
+        className={`fixed z-50 inline-flex touch-none select-none items-center gap-2 rounded-full bg-emerald-700 px-4 py-3 text-sm font-semibold text-white shadow-lg transition hover:bg-emerald-800 active:scale-95 ${position ? '' : 'bottom-5 right-5'} ${dragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+        style={widgetStyle}
         aria-expanded={open}
+        aria-label="Send feedback. Drag to move."
+        title="Drag to move"
       >
+        <GripVertical className="h-4 w-4 opacity-70" aria-hidden="true" />
         <MessageSquareWarning className="h-4 w-4" />
         <span className="hidden sm:inline">Send feedback</span>
       </button>
@@ -73,7 +147,10 @@ export default function FeedbackWidget() {
       {open && (
         <>
           <div className="fixed inset-0 z-40 bg-stone-900/20 backdrop-blur-[1px]" onClick={() => setOpen(false)} />
-          <div className="fixed bottom-24 right-5 z-50 w-[min(94vw,26rem)] animate-scale-in">
+          <div
+            className={`fixed z-50 w-[min(94vw,26rem)] animate-scale-in ${position ? '' : 'bottom-24 right-5'} ${panelAbove ? 'pb-4' : 'pt-4'}`}
+            style={position ? { left: position.x, top: panelAbove ? undefined : position.y + 56, bottom: panelAbove ? window.innerHeight - position.y + 16 : undefined } : undefined}
+          >
             <form onSubmit={send} className="rounded-2xl border border-stone-200 bg-white p-5 shadow-xl">
               <h2 className="font-bold text-stone-900">Send feedback</h2>
               <p className="mt-0.5 text-xs text-stone-500">

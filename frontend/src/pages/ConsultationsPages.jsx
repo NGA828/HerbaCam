@@ -940,6 +940,8 @@ export function ConsultationRoomPage({ basePath = '/user' }) {
   const lastChatRef = useRef(0);
   const pendingIceRef = useRef([]);
   const seenChatRef = useRef(new Set());
+  const pollingRef = useRef(false);
+  const joinedAtRef = useRef(null);
   const isPatient = user?.id === appointment?.patient?.id;
 
   const teardown = useCallback(() => {
@@ -975,6 +977,8 @@ export function ConsultationRoomPage({ basePath = '/user' }) {
     let cancelled = false;
 
     const poll = async () => {
+      if (pollingRef.current) return;
+      pollingRef.current = true;
       try {
         const messages = await consultationsAPI.messages(conversationId,
           lastChatRef.current ? { after: lastChatRef.current } : undefined);
@@ -986,6 +990,10 @@ export function ConsultationRoomPage({ basePath = '/user' }) {
           consultationsAPI.markThreadRead(conversationId).catch(() => {});
         }
         // The endpoint already returns only the *other* party's payloads.
+        // Do not consume signalling rows until this browser has created its
+        // peer. Otherwise an offer can arrive while camera permission is still
+        // pending and be advanced past permanently.
+        if (!peerRef.current) return;
         const signals = await consultationsAPI.signals(conversationId,
           lastSignalRef.current ? { after: lastSignalRef.current } : undefined);
         const inbound = extractRows(signals);
@@ -998,6 +1006,8 @@ export function ConsultationRoomPage({ basePath = '/user' }) {
         }
       } catch {
         /* a dropped poll tick is not worth bothering the user about */
+      } finally {
+        pollingRef.current = false;
       }
     };
 
@@ -1014,6 +1024,13 @@ export function ConsultationRoomPage({ basePath = '/user' }) {
       const peer = peerRef.current;
       if (!peer) return;
       if (signal.kind === 'LEAVE') {
+        // A conversation survives between visits. Ignore a previous session's
+        // leave event so reopening the room does not immediately end the new
+        // call.
+        if (joinedAtRef.current && signal.created_at
+          && new Date(signal.created_at).getTime() < joinedAtRef.current) {
+          return;
+        }
         // Not SDP, so it is handled before anything is parsed. This is the
         // same shutdown `leave()` performs, from the other side's point of
         // view: without it the call keeps a frozen image and a green badge.
@@ -1063,17 +1080,21 @@ export function ConsultationRoomPage({ basePath = '/user' }) {
     // Declared outside the try: the offer is built a few steps later, and a
     // const inside the block would be gone by then.
     let iceServers;
+    let joinedConversationId;
+    joinedAtRef.current = Date.now();
+    setMediaError('');
     try {
       const res = await consultationsAPI.startConsultation(id);
-      setConversationId(res.data.conversation_id);
+      joinedConversationId = res.data.conversation_id;
+      setConversationId(joinedConversationId);
       iceServers = Array.isArray(res.data.ice_servers) && res.data.ice_servers.length
         ? res.data.ice_servers
-        : [{ urls: 'stun:stun.l.google.com:19908' }];
+        : [{ urls: 'stun:stun.l.google.com:19302' }];
     } catch (err) {
       toast.error('Could not join', describeError(err));
       return;
     }
-    if (!navigator.mediaDevices?.getUserMedia) {
+    if (!navigator.mediaDevices?.getUserMedia || typeof RTCPeerConnection === 'undefined') {
       setMediaError('This browser cannot capture camera and microphone here (a secure https context is required). You can still chat.');
       return;
     }
@@ -1087,7 +1108,7 @@ export function ConsultationRoomPage({ basePath = '/user' }) {
       stream.getTracks().forEach((track) => peer.addTrack(track, stream));
       peer.onicecandidate = (event) => {
         if (event.candidate) {
-          consultationsAPI.sendSignal(conversationId, {
+          consultationsAPI.sendSignal(joinedConversationId, {
             kind: 'ICE', payload: JSON.stringify(event.candidate.toJSON()),
           }).catch(() => {});
         }
@@ -1110,11 +1131,18 @@ export function ConsultationRoomPage({ basePath = '/user' }) {
       if (isPatient) {
         const offer = await peer.createOffer();
         await peer.setLocalDescription(offer);
-        await consultationsAPI.sendSignal(conversationId, { kind: 'OFFER', payload: JSON.stringify(offer) });
+        await consultationsAPI.sendSignal(joinedConversationId, { kind: 'OFFER', payload: JSON.stringify(offer) });
         setCallState('connecting');
       }
-    } catch {
-      setMediaError('Camera and microphone are unavailable or blocked. The consultation can continue as chat.');
+    } catch (err) {
+      const message = err?.name === 'NotAllowedError' || err?.name === 'SecurityError'
+        ? 'Camera and microphone access was denied. Allow both permissions for this site, then join again.'
+        : err?.name === 'NotFoundError'
+          ? 'No camera or microphone was found. Connect one and join again.'
+          : err?.name === 'NotReadableError'
+            ? 'The camera or microphone is already in use by another application.'
+            : 'Camera and microphone are unavailable. Check browser permissions and try again.';
+      setMediaError(`${message} The consultation can continue as chat.`);
     }
   }
 
@@ -1123,7 +1151,7 @@ export function ConsultationRoomPage({ basePath = '/user' }) {
       consultationsAPI.sendSignal(conversationId, { kind: 'LEAVE', payload: '' }).catch(() => {});
     }
     teardown();
-    navigate(`${basePath}/appointments`);
+    navigate(basePath === '/expert' ? `${basePath}/desk` : `${basePath}/appointments`);
   }
 
   async function send(event) {
@@ -1207,17 +1235,20 @@ export function ConsultationRoomPage({ basePath = '/user' }) {
 
       {tab === 'video' ? (
         <Card className="mt-4 overflow-hidden">
-          {callState === 'idle' ? (
+          {callState === 'idle' || callState === 'ended' ? (
             <div className="p-10 text-center">
               <Camera className="mx-auto h-10 w-10 text-stone-300" />
-              <h3 className="mt-3 font-semibold text-stone-800">Not connected yet</h3>
+              <h3 className="mt-3 font-semibold text-stone-800">
+                {callState === 'ended' ? 'Call ended' : 'Not connected yet'}
+              </h3>
               <p className="mx-auto mt-1 max-w-md text-sm text-stone-500">
-                Joining opens your camera and microphone and connects you directly to {other?.full_name}.
-                Video travels peer-to-peer between the two of you; the server only relays the handshake.
+                {callState === 'ended'
+                  ? 'Start again after both participants are ready.'
+                  : `Joining opens your camera and microphone and connects you directly to ${other?.full_name}. Video travels peer-to-peer between the two of you; the server only relays the handshake.`}
               </p>
               {appointment.can_join ? (
                 <button onClick={join} className={`${btnPrimary} mt-4`}>
-                  <Video className="h-4 w-4" /> Join the room
+                  <Video className="h-4 w-4" /> {callState === 'ended' ? 'Rejoin the room' : 'Join the room'}
                 </button>
               ) : (
                 <p className="mt-4 inline-flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">

@@ -593,7 +593,7 @@ class ConsultationTransportTests(APITestCase):
         self.client.force_authenticate(user=self.patient)
         res = self.client.post(f'/api/consultations/appointments/{appointment_id}/start/')
         self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertEqual(res.data['ice_servers'], [{'urls': 'stun:stun.l.google.com:19908'}])
+        self.assertEqual(res.data['ice_servers'], [{'urls': 'stun:stun.l.google.com:19302'}])
 
     def test_a_turn_relay_can_be_added_without_touching_the_client(self):
         from django.test import override_settings

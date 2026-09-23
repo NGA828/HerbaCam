@@ -149,7 +149,9 @@ OPENROUTER_VISION_MODEL=
 # ICE servers handed to both sides when they join a video room. STUN only is fine
 # on one network; across carrier NAT you want a TURN relay, so this is a list in
 # settings, read from JSON in the environment, and never baked into the bundle.
-WEBRTC_ICE_SERVERS=[{"urls":"stun:stun.l.google.com:19908"}]
+# For calls across different networks, add a TURN relay (for example, coturn):
+# WEBRTC_ICE_SERVERS=[{"urls":"stun:stun.l.google.com:19302"},{"urls":"turn:turn.example.com:3478","username":"turn-user","credential":"turn-password"}]
+WEBRTC_ICE_SERVERS=[{"urls":"stun:stun.l.google.com:19302"}]
 # Extra "X-Herbacam-Token" credential used when a proxy strips Authorization.
 # Defaults to on under DEBUG and off otherwise. Leave it off in production: the
 # header is a bypass for a proxy defect, not an authentication scheme.
@@ -236,6 +238,9 @@ VITE_API_URL=/api
   setting `WEBRTC_ICE_SERVERS`, handed to both peers by the join call — with STUN only,
   peers on one network connect and a strict NAT falls back to chat, which the room says
   rather than pretending. Adding a `turn:` entry to that setting is the whole fix
+- Browsers only expose camera and microphone to a secure context (`https://` or
+  `localhost`) after the user grants permission. When testing from another device,
+  use HTTPS and allow camera/microphone access for the frontend origin
 - Administrators see all consultations and platform-wide booking stats
 
 ### AI assistant
