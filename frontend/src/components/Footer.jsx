@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
-import { Heart, Leaf } from 'lucide-react';
+import { Heart } from 'lucide-react';
+import { LogoMark } from './Logo';
 
 export default function Footer() {
   return (
@@ -8,9 +9,7 @@ export default function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           <div className="md:col-span-1">
             <Link to="/" className="flex items-center gap-2 mb-4">
-              <div className="w-9 h-9 bg-green-600 rounded-xl flex items-center justify-center">
-                <Leaf className="w-5 h-5 text-white" />
-              </div>
+              <LogoMark className="w-9 h-9" />
               <span className="text-xl font-bold text-white">Ancestor</span>
             </Link>
             <p className="text-sm text-stone-400 leading-relaxed">

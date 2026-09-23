@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
-import { Menu, X, LayoutDashboard, LogOut, Leaf } from 'lucide-react';
+import { Menu, X, LayoutDashboard, LogOut } from 'lucide-react';
+import { LogoMark } from './Logo';
 
 export default function Navbar() {
   const { user, logout } = useAuth();
@@ -34,9 +35,7 @@ export default function Navbar() {
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <Link to="/" className="flex items-center gap-2 group">
-            <div className="w-9 h-9 bg-gradient-to-br from-green-600 to-emerald-700 rounded-xl flex items-center justify-center shadow-sm group-hover:shadow-md transition-shadow">
-              <Leaf className="w-5 h-5 text-white" />
-            </div>
+            <LogoMark className="w-9 h-9 drop-shadow-sm transition-transform group-hover:scale-105" />
             <span className="text-xl font-bold text-green-800">Ancestor</span>
           </Link>
 
