@@ -9,12 +9,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
-  CalendarClock, CalendarPlus, Camera, CheckCircle2, Clock3, Gauge, LogOut,
+  CalendarClock, CalendarPlus, Camera, CheckCircle2, Clock3, Gauge, LogOut, MapPin,
   MessageSquare, Mic, MicOff, RefreshCw, Send, ShieldAlert, Trash2, Users,
   Video, VideoOff, XCircle,
 } from 'lucide-react';
 
-import { consultationsAPI } from '../api/client';
+import { consultationsAPI, geographyAPI } from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
 import { describeError, useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../components/ui/ConfirmDialog';
@@ -51,22 +51,41 @@ export function BookAppointmentPage() {
   const { toast } = useToast();
   const navigate = useNavigate();
   const [slots, setSlots] = useState(null);
+  const [profiles, setProfiles] = useState({});
+  const [coords, setCoords] = useState(null);
+  const [locating, setLocating] = useState(false);
+  const [filters, setFilters] = useState({ specialization: '', verifiedOnly: false });
   const [error, setError] = useState('');
   const [selected, setSelected] = useState(null);
   const [reason, setReason] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const load = useCallback(async () => {
+  // The window list says *when*; the directory says *who*, and only the
+  // directory knows about specialties, regions and verification. Ask for both
+  // and join them by user id, so a filter never has to re-shape the payload.
+  const load = useCallback(async (position = coords) => {
     setError('');
     try {
-      const res = await consultationsAPI.slots();
-      setSlots(extractRows(res));
+      const params = position ? { lat: position.lat, lng: position.lng } : {};
+      const [slotRes, expertRes] = await Promise.all([
+        consultationsAPI.slots(),
+        consultationsAPI.experts(params),
+      ]);
+      setSlots(extractRows(slotRes));
+      const rows = extractRows(expertRes) || [];
+      setProfiles(rows.reduce((acc, row) => { acc[row.user] = row; return acc; }, {}));
     } catch (err) {
       setError(describeError(err));
     }
-  }, []);
+  }, [coords]);
 
   useEffect(() => { load(); }, [load]);
+
+  const specializations = useMemo(() => {
+    const seen = new Set();
+    Object.values(profiles).forEach((p) => { if (p.specialization) seen.add(p.specialization); });
+    return [...seen].sort();
+  }, [profiles]);
 
   // Group the flat window list by consultant so the page reads as
   // "who can I see", not "a pile of timestamps".
@@ -79,8 +98,36 @@ export function BookAppointmentPage() {
       }
       groups.get(key).windows.push(slot);
     });
-    return [...groups.values()];
-  }, [slots]);
+    const list = [...groups.values()].map((group) => ({ ...group, profile: profiles[group.expert] || {} }))
+      .filter((group) => !filters.specialization || group.profile.specialization === filters.specialization)
+      .filter((group) => !filters.verifiedOnly || group.profile.is_verified);
+    if (coords) {
+      // Nearest first; anyone without a region keeps their place at the end.
+      list.sort((a, b) => (a.profile.distance_km ?? 1e9) - (b.profile.distance_km ?? 1e9));
+    }
+    return list;
+  }, [slots, profiles, filters, coords]);
+
+  const anyFilter = filters.specialization || filters.verifiedOnly || Boolean(coords);
+
+  function askLocation() {
+    if (!('geolocation' in navigator)) {
+      toast.error('This browser cannot share a location', 'Pick a specialist by region instead.');
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setLocating(false);
+        setCoords({ lat: pos.coords.latitude.toFixed(4), lng: pos.coords.longitude.toFixed(4) });
+      },
+      () => {
+        setLocating(false);
+        toast.error('Could not read your location', 'Allow location access, or choose a specialist by name.');
+      },
+      { timeout: 8000, maximumAge: 300000 },
+    );
+  }
 
   async function book() {
     if (!selected) return;
@@ -103,7 +150,7 @@ export function BookAppointmentPage() {
       <AdminHeader
         eyebrow="For patients"
         title="Book a consultation"
-        description="Choose an open window published by a specialist. They confirm before it appears as scheduled."
+        description="Choose a specialist by what they actually study, then pick one of the windows they publish. They confirm before it appears as scheduled."
         action={(
           <Link to="/user/appointments" className={btnSecondary}>
             <CalendarClock className="h-4 w-4" /> My appointments
@@ -111,6 +158,42 @@ export function BookAppointmentPage() {
         )}
         icon={CalendarPlus}
       />
+
+      <Card className="mt-6 p-4">
+        <div className="flex flex-wrap items-end gap-3">
+          <Field label="Specialisation">
+            <select
+              className={selectCls}
+              value={filters.specialization}
+              onChange={(e) => setFilters((f) => ({ ...f, specialization: e.target.value }))}
+            >
+              <option value="">Any specialisation</option>
+              {specializations.map((spec) => <option key={spec} value={spec}>{spec}</option>)}
+            </select>
+          </Field>
+          <label className="flex items-center gap-2 pb-2 text-sm text-stone-600">
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-stone-300 text-emerald-600"
+              checked={filters.verifiedOnly}
+              onChange={(e) => setFilters((f) => ({ ...f, verifiedOnly: e.target.checked }))}
+            />
+            Verified specialists only
+          </label>
+          <div className="ml-auto flex items-center gap-2 pb-1">
+            {coords && (
+              <button type="button" className={btnGhost} onClick={() => setCoords(null)}>
+                Sorted by distance · clear
+              </button>
+            )}
+            {!coords && (
+              <button type="button" className={btnSecondary} onClick={askLocation} disabled={locating}>
+                {locating ? <Spinner /> : <MapPin className="h-4 w-4" />} Near me
+              </button>
+            )}
+          </div>
+        </div>
+      </Card>
 
       {error && <div className="mt-6"><ErrorState message={error} onRetry={load} /></div>}
 
@@ -120,9 +203,13 @@ export function BookAppointmentPage() {
         <div className="mt-6">
           <EmptyState
             icon={CalendarClock}
-            title="No open consultation windows"
-            hint="Specialists publish the times they are available. Nothing is open right now — check again later, or ask an administrator to nudge a specialist to publish availability."
-            action={<button onClick={load} className={btnSecondary}><RefreshCw className="h-4 w-4" /> Refresh</button>}
+            title={anyFilter ? 'No specialist matches those filters' : 'No open consultation windows'}
+            hint={anyFilter
+              ? 'Widen the search: clear the specialisation or distance filter and every published window comes back.'
+              : 'Specialists publish the times they are available. Nothing is open right now — check again later, or ask an administrator to nudge a specialist to publish availability.'}
+            action={anyFilter
+              ? <button onClick={() => { setFilters({ specialization: '', verifiedOnly: false }); setCoords(null); }} className={btnSecondary}>Clear filters</button>
+              : <button onClick={load} className={btnSecondary}><RefreshCw className="h-4 w-4" /> Refresh</button>}
           />
         </div>
       )}
@@ -136,11 +223,26 @@ export function BookAppointmentPage() {
                   <div className="flex items-center gap-3">
                     <Avatar name={group.name} size="h-11 w-11 text-sm" />
                     <div>
-                      <h3 className="font-semibold text-stone-900">{group.name}</h3>
-                      <p className="text-xs text-stone-500">{group.windows.length} open window{group.windows.length > 1 ? 's' : ''}</p>
+                      <h3 className="font-semibold text-stone-900">
+                        {group.name}
+                        {group.profile.is_verified && (
+                          <Badge tone="emerald" className="ml-2">Verified</Badge>
+                        )}
+                      </h3>
+                      {group.profile.specialization && (
+                        <p className="text-sm text-stone-600">{group.profile.specialization}</p>
+                      )}
+                      <p className="text-xs text-stone-500">
+                        {group.profile.region_name ? `${group.profile.region_name} · ` : ''}
+                        {group.profile.distance_km != null ? `about ${Math.round(group.profile.distance_km)} km away · ` : ''}
+                        {group.windows.length} open window{group.windows.length > 1 ? 's' : ''}
+                      </p>
                     </div>
                   </div>
                 </div>
+                {group.profile.focus && (
+                  <p className="mt-3 text-sm leading-relaxed text-stone-600">{group.profile.focus}</p>
+                )}
                 <div className="mt-4 flex flex-wrap gap-2">
                   {group.windows.map((slot) => {
                     const active = selected === slot.id;
@@ -190,6 +292,124 @@ export function BookAppointmentPage() {
         </div>
       )}
     </PageTransition>
+  );
+}
+
+/**
+ * Move a live booking onto another of the same specialist's open windows.
+ *
+ * Both sides get it: a patient whose plans change, and a specialist whose diary
+ * shifts. What the booking becomes afterwards is the server's call — a patient's
+ * request needs confirming again, a specialist's is already agreed.
+ */
+function RescheduleControl({ appointment, onDone, className = '' }) {
+  const { toast } = useToast();
+  const [open, setOpen] = useState(false);
+  const [options, setOptions] = useState(null);
+  const [choice, setChoice] = useState(null);
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function refresh() {
+    setOptions(null);
+    try {
+      const res = await consultationsAPI.slots();
+      setOptions((extractRows(res) || []).filter((row) => (
+        row.expert === appointment.expert?.id && row.id !== appointment.slot_detail?.id
+      )));
+    } catch (err) {
+      setOptions([]);
+      toast.error('Could not load other windows', describeError(err));
+    }
+  }
+
+  async function toggle() {
+    if (open) {
+      setOpen(false);
+      return;
+    }
+    setOpen(true);
+    setChoice(null);
+    await refresh();
+  }
+
+  async function move() {
+    if (!choice) return;
+    setBusy(true);
+    try {
+      await consultationsAPI.reschedule(appointment.id, { slot: choice, reason: note });
+      toast.success('Appointment moved', 'The other side has been told about the new time.');
+      setOpen(false);
+      onDone?.();
+    } catch (err) {
+      // The window may have been taken a second ago: drop the choice and
+      // re-read the list rather than telling the user to close and reopen.
+      setChoice(null);
+      toast.error('Could not move that appointment', describeError(err));
+      refresh();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className={className}>
+      <button type="button" className={`${btnGhost} whitespace-nowrap`} onClick={toggle}>
+        <CalendarClock className="h-4 w-4" /> {open ? 'Close' : 'Move'}
+      </button>
+      {open && (
+        <div className="mt-2 rounded-xl border border-stone-200 bg-white p-3 text-left shadow-sm">
+          <p className="text-xs text-stone-500">
+            Pick another window this specialist has open. The one you leave goes back to the
+            public list straight away.
+          </p>
+          {options === null ? (
+            <div className="mt-3"><Spinner /></div>
+          ) : options.length === 0 ? (
+            <p className="mt-2 text-sm text-stone-500">
+              No other window is open with this specialist — they can publish one from the desk.
+            </p>
+          ) : (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {options.map((row) => {
+                const active = choice === row.id;
+                return (
+                  <button
+                    key={row.id}
+                    type="button"
+                    onClick={() => setChoice(active ? null : row.id)}
+                    className={`rounded-lg border px-2.5 py-1.5 text-left text-xs transition ${
+                      active
+                        ? 'border-emerald-600 bg-emerald-50 text-emerald-900'
+                        : 'border-stone-200 bg-white text-stone-700 hover:bg-stone-50'
+                    }`}
+                  >
+                    <span className="block font-semibold">{when(row.starts_at)}</span>
+                    <span className="block text-stone-500">{row.duration_minutes} min</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          {choice && (
+            <>
+              <input
+                className={`${inputCls} mt-3`}
+                placeholder="Reason for the change (optional)"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+              />
+              <div className="mt-2 flex justify-end gap-2">
+                <button type="button" className={btnGhost} onClick={() => setOpen(false)}>Cancel</button>
+                <button type="button" className={btnPrimary} onClick={move} disabled={busy}>
+                  {busy ? <Spinner /> : <CheckCircle2 className="h-4 w-4" />} Move it
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -308,9 +528,12 @@ export function MyAppointmentsPage() {
                       <MessageSquare className="h-4 w-4" /> Messages
                     </Link>
                     {['PENDING', 'CONFIRMED'].includes(appointment.status) && (
-                      <button type="button" className={btnDanger} onClick={() => act(appointment, 'cancel')}>
-                        <XCircle className="h-4 w-4" /> Cancel
-                      </button>
+                      <>
+                        <RescheduleControl appointment={appointment} onDone={load} />
+                        <button type="button" className={btnDanger} onClick={() => act(appointment, 'cancel')}>
+                          <XCircle className="h-4 w-4" /> Cancel
+                        </button>
+                      </>
                     )}
                   </div>
                 </div>
@@ -338,16 +561,37 @@ export function ConsultantDeskPage() {
     date: '', start: '10:00', minutes: '30', note: '',
   });
   const [saving, setSaving] = useState(false);
+  // The directory card: what patients filter on. Absent until the API answers,
+  // and a staff account without a specialist listing simply never sees one.
+  const [listing, setListing] = useState(undefined);
+  const [listingForm, setListingForm] = useState({ specialization: '', region: '', focus: '', is_accepting_patients: true });
+  const [regions, setRegions] = useState([]);
+  const [listingSaving, setListingSaving] = useState(false);
 
   const load = useCallback(async () => {
     setError('');
     try {
-      const [availability, booked] = await Promise.all([
+      const [availability, booked, profile, regionList] = await Promise.all([
         consultationsAPI.availability(),
         consultationsAPI.appointments(),
+        consultationsAPI.myExpertProfile().catch(() => null),
+        geographyAPI.regions().catch(() => null),
       ]);
       setSlots(extractRows(availability));
       setAppointments(extractRows(booked));
+      const rows = extractRows(regionList) || [];
+      setRegions(rows);
+      if (profile && profile.data && profile.data.user) {
+        setListing(profile.data);
+        setListingForm({
+          specialization: profile.data.specialization || '',
+          region: profile.data.region || '',
+          focus: profile.data.focus || '',
+          is_accepting_patients: profile.data.is_accepting_patients !== false,
+        });
+      } else {
+        setListing(null);
+      }
     } catch (err) {
       setError(describeError(err));
     }
@@ -362,6 +606,29 @@ export function ConsultantDeskPage() {
 
   function set(key) {
     return (event) => setForm((prev) => ({ ...prev, [key]: event.target.value }));
+  }
+
+  function setListing_(key) {
+    return (event) => setListingForm((prev) => ({
+      ...prev,
+      [key]: event.target.type === 'checkbox' ? event.target.checked : event.target.value,
+    }));
+  }
+
+  async function saveListing(event) {
+    event.preventDefault();
+    setListingSaving(true);
+    try {
+      const res = await consultationsAPI.updateMyExpertProfile({
+        ...listingForm, region: listingForm.region || null,
+      });
+      setListing(res.data);
+      toast.success('Listing saved', 'Patients see the new specialisation and region immediately.');
+    } catch (err) {
+      toast.error('Could not save your listing', describeError(err));
+    } finally {
+      setListingSaving(false);
+    }
   }
 
   async function publish(event) {
@@ -437,6 +704,63 @@ export function ConsultantDeskPage() {
       />
 
       {error && <div className="mt-6"><ErrorState message={error} onRetry={load} /></div>}
+
+      {listing && (
+        <Card className="mt-6 p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h3 className="flex items-center gap-2 font-semibold text-stone-900">
+                <Users className="h-4 w-4 text-emerald-700" /> How patients find you
+              </h3>
+              <p className="mt-1 text-sm text-stone-500">
+                This is the listing the booking page filters on. Verification is an
+                administrator's call, not yours.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              {listing.is_verified
+                ? <Badge tone="emerald">Verified</Badge>
+                : <Badge tone="amber">Awaiting verification</Badge>}
+              {listing.is_accepting_patients
+                ? <Badge tone="sky">Open to patients</Badge>
+                : <Badge tone="red">Not accepting patients</Badge>}
+            </div>
+          </div>
+          <form onSubmit={saveListing} className="mt-4 grid gap-3 md:grid-cols-3">
+            <Field label="Specialisation" hint="Patients can filter on this exact phrase.">
+              <input className={inputCls} value={listingForm.specialization}
+                     onChange={setListing_('specialization')}
+                     placeholder="Malaria and bark preparations" />
+            </Field>
+            <Field label="Region" hint="Used for the nearest-first ordering.">
+              <select className={selectCls} value={listingForm.region} onChange={setListing_('region')}>
+                <option value="">Not stated</option>
+                {regions.map((region) => (
+                  <option key={region.id} value={region.id}>{region.name}</option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Availability">
+              <label className="mt-2 flex items-center gap-2 text-sm text-stone-600">
+                <input type="checkbox" className="h-4 w-4 rounded border-stone-300 text-emerald-600"
+                       checked={listingForm.is_accepting_patients} onChange={setListing_('is_accepting_patients')} />
+                Show my windows to patients
+              </label>
+            </Field>
+            <div className="md:col-span-3">
+              <Field label="What you focus on" hint="Optional, shown under your name on the booking page.">
+                <textarea className={`${inputCls} min-h-20 resize-y`} value={listingForm.focus}
+                          onChange={setListing_('focus')} placeholder="Where your published work overlaps with what people ask you about." />
+              </Field>
+            </div>
+            <div className="md:col-span-3 flex justify-end">
+              <button type="submit" className={btnPrimary} disabled={listingSaving}>
+                {listingSaving ? <Spinner /> : <CheckCircle2 className="h-4 w-4" />} Save listing
+              </button>
+            </div>
+          </form>
+        </Card>
+      )}
 
       <div className="mt-6 grid gap-4 lg:grid-cols-5">
         <Reveal className="lg:col-span-2">
@@ -570,6 +894,9 @@ export function ConsultantDeskPage() {
                           <button type="button" className={btnDanger} onClick={() => decide(appointment, 'cancel')}>
                             Decline
                           </button>
+                        )}
+                        {['PENDING', 'CONFIRMED'].includes(appointment.status) && (
+                          <RescheduleControl appointment={appointment} onDone={load} className="basis-full" />
                         )}
                       </div>
                     </Td>
@@ -733,9 +1060,15 @@ export function ConsultationRoomPage({ basePath = '/user' }) {
 
   async function join() {
     setTab('video');
+    // Declared outside the try: the offer is built a few steps later, and a
+    // const inside the block would be gone by then.
+    let iceServers;
     try {
       const res = await consultationsAPI.startConsultation(id);
       setConversationId(res.data.conversation_id);
+      iceServers = Array.isArray(res.data.ice_servers) && res.data.ice_servers.length
+        ? res.data.ice_servers
+        : [{ urls: 'stun:stun.l.google.com:19908' }];
     } catch (err) {
       toast.error('Could not join', describeError(err));
       return;
@@ -749,9 +1082,7 @@ export function ConsultationRoomPage({ basePath = '/user' }) {
       localStreamRef.current = stream;
       if (localVideo.current) localVideo.current.srcObject = stream;
 
-      const peer = new RTCPeerConnection({
-        iceServers: [{ urls: 'stun:stun.l.google.com:19908' }],
-      });
+      const peer = new RTCPeerConnection({ iceServers });
       peerRef.current = peer;
       stream.getTracks().forEach((track) => peer.addTrack(track, stream));
       peer.onicecandidate = (event) => {
@@ -978,26 +1309,44 @@ function safeParse(text) {
 /* ------------------------------------------------------------------ */
 
 export function AdminConsultationsPage() {
+  const { toast } = useToast();
   const [stats, setStats] = useState(null);
   const [rows, setRows] = useState([]);
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
+  const [experts, setExperts] = useState([]);
+  const [busy, setBusy] = useState(null);
 
   const load = useCallback(async () => {
     setError('');
     try {
-      const [statRes, listRes] = await Promise.all([
+      const [statRes, listRes, expertRes] = await Promise.all([
         consultationsAPI.stats(),
         consultationsAPI.appointments({ scope: 'all', ...(status ? { status } : {}) }),
+        consultationsAPI.experts(),
       ]);
       setStats(statRes.data);
       setRows(extractRows(listRes));
+      setExperts(extractRows(expertRes) || []);
     } catch (err) {
       setError(describeError(err));
     }
   }, [status]);
 
   useEffect(() => { load(); }, [load]);
+
+  async function patchListing(row, changes, label) {
+    setBusy(row.id);
+    try {
+      await consultationsAPI.updateExpertProfile(row.id, changes);
+      setExperts((prev) => prev.map((r) => (r.id === row.id ? { ...r, ...changes } : r)));
+      toast.success(label, `${row.full_name}'s listing is updated.`);
+    } catch (err) {
+      toast.error('Could not update that listing', describeError(err));
+    } finally {
+      setBusy(null);
+    }
+  }
 
   return (
     <PageTransition>
@@ -1047,6 +1396,73 @@ export function AdminConsultationsPage() {
                     <Td className="whitespace-nowrap text-stone-600">{when(appointment.slot_detail?.starts_at)}</Td>
                     <Td><StatusPill status={appointment.status} /></Td>
                     <Td className="font-mono text-xs text-stone-400">{appointment.room_id?.slice(0, 8)}</Td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </TableCard>
+      </div>
+
+      <div className="mt-6">
+        <TableCard>
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-100 px-5 py-4">
+            <div>
+              <h3 className="font-semibold text-stone-900">Specialist listings</h3>
+              <p className="mt-0.5 text-sm text-stone-500">
+                Who appears on the booking page, for what, and whether the team stands behind them.
+              </p>
+            </div>
+            <span className="text-xs text-stone-400">
+              {experts.filter((r) => r.is_verified).length} of {experts.length} verified
+            </span>
+          </div>
+          {experts.length === 0 ? (
+            <EmptyState icon={Users} title="No specialist listings yet"
+              hint="Specialists appear here once they register or publish availability. Each one gets a listing they can fill in from their desk." />
+          ) : (
+            <table className="w-full text-left text-sm">
+              <thead className="bg-stone-50 text-xs uppercase tracking-wide text-stone-500">
+                <tr><Th>Specialist</Th><Th>Specialisation</Th><Th>Region</Th><Th>Windows</Th><Th>Status</Th><Th /></tr>
+              </thead>
+              <tbody className="divide-y divide-stone-100">
+                {experts.map((row) => (
+                  <tr key={row.id} className="hover:bg-stone-50/60">
+                    <Td>
+                      <span className="font-semibold text-stone-900">{row.full_name}</span>
+                      <span className="block text-xs text-stone-400">@{row.username}</span>
+                    </Td>
+                    <Td className="text-stone-600">{row.specialization || <span className="text-stone-400">not stated</span>}</Td>
+                    <Td className="text-stone-600">{row.region_name || <span className="text-stone-400">—</span>}</Td>
+                    <Td>{row.open_windows}</Td>
+                    <Td>
+                      <div className="flex flex-wrap gap-1">
+                        {row.is_verified ? <Badge tone="emerald">Verified</Badge> : <Badge tone="amber">Unverified</Badge>}
+                        {!row.is_accepting_patients && <Badge tone="red">Suspended</Badge>}
+                      </div>
+                    </Td>
+                    <Td>
+                      <div className="flex justify-end gap-2">
+                        <button
+                          type="button"
+                          className={btnGhost}
+                          disabled={busy === row.id}
+                          onClick={() => patchListing(row, { is_verified: !row.is_verified },
+                            row.is_verified ? 'Verification removed' : 'Specialist verified')}
+                        >
+                          {row.is_verified ? 'Remove verification' : 'Verify'}
+                        </button>
+                        <button
+                          type="button"
+                          className={btnSecondary}
+                          disabled={busy === row.id}
+                          onClick={() => patchListing(row, { is_accepting_patients: !row.is_accepting_patients },
+                            row.is_accepting_patients ? 'Listing hidden' : 'Listing reopened')}
+                        >
+                          {row.is_accepting_patients ? 'Stop listing' : 'Reinstate'}
+                        </button>
+                      </div>
+                    </Td>
                   </tr>
                 ))}
               </tbody>

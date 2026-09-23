@@ -1,6 +1,7 @@
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from .models import Region, Division, Community
+from .utils import haversine_km
 from .serializers import RegionSerializer, RegionListSerializer, DivisionSerializer, CommunitySerializer
 
 
@@ -68,8 +69,7 @@ class LocateView(generics.GenericAPIView):
     permission_classes = [permissions.AllowAny]
 
     def get(self, request):
-        import math
-
+        
         try:
             lat = float(request.query_params.get('lat'))
             lng = float(request.query_params.get('lng'))
@@ -82,17 +82,9 @@ class LocateView(generics.GenericAPIView):
             return Response({'detail': 'Coordinates are out of range.'},
                             status.HTTP_400_BAD_REQUEST)
 
-        def hav(a_lat, a_lng, b_lat, b_lng):
-            r = 6371.0
-            p1, p2 = math.radians(a_lat), math.radians(b_lat)
-            dp = math.radians(b_lat - a_lat)
-            dl = math.radians(b_lng - a_lng)
-            h = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
-            return 2 * r * math.asin(math.sqrt(h))
-
         best, best_d = None, None
         for region in Region.objects.exclude(latitude=None).exclude(longitude=None):
-            d = hav(lat, lng, float(region.latitude), float(region.longitude))
+            d = haversine_km(lat, lng, float(region.latitude), float(region.longitude))
             if best_d is None or d < best_d:
                 best, best_d = region, d
 

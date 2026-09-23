@@ -254,3 +254,27 @@ class HeaderResilientAuthTests(APITestCase):
         res = self.client.patch('/api/auth/profile/', {'bio': 'injected'},
                                 format='json')
         self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class SpecialistSelfRegistrationTests(APITestCase):
+    """The diagram lets the specialized expert register; ADMIN still cannot."""
+
+    def test_expert_registration_creates_an_unverified_listing(self):
+        from consultations.models import ExpertProfile
+        res = self.client.post('/api/auth/register/', {
+            'username': 'new_specialist', 'email': 'ns@example.com',
+            'first_name': 'New', 'last_name': 'Specialist',
+            'password': 'specialistpw', 'password_confirm': 'specialistpw', 'role': 'EXPERT',
+        }, format='json')
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        profile = ExpertProfile.objects.get(user__username='new_specialist')
+        self.assertFalse(profile.is_verified)
+        self.assertTrue(profile.is_accepting_patients)
+
+    def test_admin_role_still_cannot_come_from_a_form(self):
+        res = self.client.post('/api/auth/register/', {
+            'username': 'sneaky', 'email': 'sneaky@example.com',
+            'password': 'specialistpw', 'password_confirm': 'specialistpw', 'role': 'ADMIN',
+        }, format='json')
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('role', res.data)

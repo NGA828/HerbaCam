@@ -4,7 +4,8 @@ from rest_framework import serializers
 
 from accounts.models import User
 
-from .models import Appointment, AvailabilitySlot, Conversation, Message
+from .models import (Appointment, AvailabilitySlot, Conversation, ExpertProfile,
+                         Message)
 
 
 class MinimalUserSerializer(serializers.ModelSerializer):
@@ -159,6 +160,35 @@ class BookingSerializer(serializers.Serializer):
         return slot
 
 
+class RescheduleSerializer(serializers.Serializer):
+    """Input for moving a live booking onto another window.
+
+    Only windows of the same specialist qualify: a booking that changes
+    consultant is a cancellation plus a new request, not a reschedule, and the
+    platform should not pretend otherwise.
+    """
+
+    slot = serializers.IntegerField(required=True)
+    reason = serializers.CharField(required=False, allow_blank=True, max_length=4000)
+
+    def validate_slot(self, slot_id):
+        appointment = self.context['appointment']
+        slot = AvailabilitySlot.objects.filter(pk=slot_id).select_related('expert').first()
+        if slot is None:
+            raise serializers.ValidationError('That availability window does not exist.')
+        if slot.expert_id != appointment.expert_id:
+            raise serializers.ValidationError(
+                'Pick another window from the same specialist — a booking cannot change consultant.'
+            )
+        if slot.pk == appointment.slot_id:
+            raise serializers.ValidationError('That appointment is already on this window.')
+        if not slot.is_open_to_patients():
+            raise serializers.ValidationError(
+                'That window is no longer bookable — it is booked, closed, or in the past.'
+            )
+        return slot
+
+
 class ReviewSerializer(serializers.Serializer):
     """Input for the consultant's outcome of a consultation."""
 
@@ -223,3 +253,43 @@ class ConversationSerializer(serializers.ModelSerializer):
     def get_last_message(self, obj):
         last = obj.messages.order_by('-created_at', '-id').first()
         return MessageSerializer(last).data if last else None
+
+
+class ExpertProfileSerializer(serializers.ModelSerializer):
+    """A specialist's listing. ``is_verified`` stays writable here because the
+    only view that accepts writes from an administrator uses this serializer;
+    the specialist's own view marks it read-only.
+    """
+
+    username = serializers.CharField(source='user.username', read_only=True)
+    full_name = serializers.SerializerMethodField()
+    region_name = serializers.CharField(source='region.name', read_only=True, default='')
+    open_windows = serializers.SerializerMethodField()
+    distance_km = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ExpertProfile
+        fields = ['id', 'user', 'username', 'full_name', 'region', 'region_name',
+                  'specialization', 'focus', 'is_verified', 'is_accepting_patients',
+                  'open_windows', 'distance_km']
+        read_only_fields = ['id', 'user']
+
+    def get_full_name(self, obj):
+        return obj.user.get_full_name() or obj.user.username
+
+    def get_open_windows(self, obj):
+        counts = self.context.get('open_counts')
+        return None if counts is None else counts.get(obj.user_id, 0)
+
+    def get_distance_km(self, obj):
+        origin = self.context.get('origin')
+        return obj.distance_from(*origin) if origin else None
+
+
+class ExpertSelfSerializer(ExpertProfileSerializer):
+    """The specialist's own copy: they set specialty, region and whether they
+    are taking patients — never their own verification.
+    """
+
+    class Meta(ExpertProfileSerializer.Meta):
+        read_only_fields = ExpertProfileSerializer.Meta.read_only_fields + ['is_verified']

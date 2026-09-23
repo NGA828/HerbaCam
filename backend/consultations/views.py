@@ -1,4 +1,5 @@
 """Views for availability, appointments, consultations and messaging."""
+from django.conf import settings
 from django.db import transaction
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404
@@ -16,11 +17,15 @@ from .models import (
     Appointment,
     AvailabilitySlot,
     Conversation,
+    ExpertProfile,
     Message,
 )
 from .permissions import CanPublishAvailability, IsAppointmentParty
 from .serializers import (
     AppointmentSerializer,
+    RescheduleSerializer,
+    ExpertProfileSerializer,
+    ExpertSelfSerializer,
     AppointmentUpdateSerializer,
     AvailabilitySlotSerializer,
     BookingSerializer,
@@ -131,7 +136,7 @@ class PublicSlotList(generics.ListAPIView):
         date = self.request.query_params.get('date')
         if date:
             qs = qs.filter(starts_at__date=date)
-        return qs[:200]
+        return accepting_only(qs)[:200]
 
 
 # --------------------------------------------------------------------------
@@ -286,6 +291,70 @@ class UpdateAppointmentStatus(APIView):
         return Response(AppointmentSerializer(appointment).data)
 
 
+class RescheduleAppointment(APIView):
+    """Move a live booking to one of the same specialist's other open windows.
+
+    The window the patient leaves comes back for everyone on its own: a slot is
+    only considered taken while a live appointment points at it. A move asked for
+    by the patient returns the booking to PENDING, because the new time still
+    needs the specialist's agreement; a move proposed by the specialist is
+    already agreed and stays CONFIRMED.
+    """
+
+    permission_classes = [permissions.IsAuthenticated, IsAppointmentParty]
+
+    def post(self, request, pk):
+        appointment = get_object_or_404(
+            Appointment.objects.select_related('patient', 'expert', 'slot'), pk=pk,
+        )
+        self.check_object_permissions(request, appointment)
+        if appointment.status not in (Appointment.Status.PENDING, Appointment.Status.CONFIRMED):
+            raise ValidationError({
+                'status': f'Cannot move an appointment that is {appointment.get_status_display().lower()}.'
+            })
+
+        serializer = RescheduleSerializer(
+            data=request.data, context={'request': request, 'appointment': appointment},
+        )
+        serializer.is_valid(raise_exception=True)
+        new_slot = serializer.validated_data['slot']
+        note = serializer.validated_data.get('reason', '')
+
+        with transaction.atomic():
+            # Same lock as booking: whoever claims the window first keeps it.
+            claimed = AvailabilitySlot.objects.select_for_update().get(pk=new_slot.pk)
+            if not claimed.is_open_to_patients():
+                raise ValidationError({'slot': 'That window was just taken by someone else.'})
+            previous = appointment.slot
+            appointment.slot = claimed
+            if request.user.id == appointment.patient_id:
+                appointment.status = Appointment.Status.PENDING
+            appointment.save()
+
+            conversation = Conversation.objects.filter(appointment=appointment).first()
+            if conversation is not None:
+                conversation.messages.create(
+                    sender=request.user,
+                    kind=Message.Kind.TEXT,
+                    body=(f'Moved from {previous.starts_at:%a %d %b, %H:%M} to '
+                          f'{claimed.starts_at:%a %d %b, %H:%M}.'
+                          + (f' {note}' if note else '')),
+                )
+
+        recipient = appointment.expert if request.user.id == appointment.patient_id else appointment.patient
+        send_notification(
+            recipient, 'APPOINTMENT_RESCHEDULED',
+            'Consultation moved to a new time',
+            f'Appointment #{appointment.id} is now {claimed.starts_at:%a %d %b, %H:%M}'
+            f'{", pending confirmation" if appointment.status == Appointment.Status.PENDING else ""}.',
+            related_object_type='Appointment', related_object_id=appointment.id,
+        )
+        _log(request, 'APPOINTMENT_RESCHEDULE',
+             f'Moved appointment #{appointment.id} to slot #{claimed.pk}',
+             target_type='Appointment', target_id=appointment.id)
+        return Response(AppointmentSerializer(appointment).data)
+
+
 class StartConsultation(APIView):
     """Marks the moment a participant enters the video room, and hands back the room id."""
 
@@ -306,8 +375,12 @@ class StartConsultation(APIView):
         )
         _log(request, 'CONSULTATION_START', f'Started consultation #{appointment.id}',
              target_type='Appointment', target_id=appointment.id)
+        # ICE servers travel with the join instead of being baked into the
+        # bundle, so adding a TURN relay is an environment change, not a deploy
+        # of new frontend code.
         return Response({'room_id': str(appointment.room_id),
-                         'conversation_id': conversation.id})
+                         'conversation_id': conversation.id,
+                         'ice_servers': settings.WEBRTC_ICE_SERVERS})
 
 
 # --------------------------------------------------------------------------
@@ -468,3 +541,122 @@ class ConsultationStats(APIView):
             'consultants': User.objects.filter(role=User.Role.EXPERT).count(),
             'patients_booked': qs.values('patient').distinct().count(),
         })
+
+# --------------------------------------------------------------------------
+# Specialist directory — "book appointment" needs someone to book
+# --------------------------------------------------------------------------
+
+def open_window_counts():
+    """``expert_id -> open windows`` in one query, mirroring book() rules."""
+    rows = (AvailabilitySlot.objects
+            .filter(is_closed=False, starts_at__gt=timezone.now())
+            .exclude(appointments__status__in=ACTIVE_APPOINTMENT_STATUSES)
+            .values('expert_id').annotate(n=Count('id')))
+    return {row['expert_id']: row['n'] for row in rows}
+
+
+def accepting_only(queryset):
+    """Windows from specialists who have not been pulled off the marketplace.
+
+    A missing profile counts as accepting on purpose: the row is created by a
+    signal, so absence must never silently empty the booking list.
+    """
+    return queryset.filter(
+        Q(expert__consultant_profile__is_accepting_patients=True)
+        | Q(expert__consultant_profile__isnull=True)
+    )
+
+
+class ExpertDirectory(generics.ListAPIView):
+    """Specialized experts, filterable by specialty, nearest-first when the
+    caller shares a location (the same coordinate pair the geolocation use case
+    already uses). A suspended specialist disappears from everyone but an
+    administrator.
+    """
+
+    serializer_class = ExpertProfileSerializer
+    permission_classes = [permissions.AllowAny]
+
+    def _origin(self):
+        params = self.request.query_params
+        try:
+            return (float(params['lat']), float(params['lng']))
+        except (KeyError, TypeError, ValueError):
+            return None
+
+    def get_queryset(self):
+        qs = ExpertProfile.objects.select_related('user', 'region').filter(user__is_active=True)
+        user = self.request.user
+        if not (user and user.is_authenticated and _is_admin(user)):
+            qs = qs.filter(is_accepting_patients=True)
+        specialization = self.request.query_params.get('specialization')
+        if specialization:
+            qs = qs.filter(specialization__icontains=specialization)
+        region = self.request.query_params.get('region')
+        if region:
+            qs = qs.filter(region_id=region)
+        origin = self._origin()
+        if origin:
+            # Sorted before pagination, so "nearest" spans the whole directory
+            # instead of the nearest few on page one.
+            def key(profile):
+                distance = profile.distance_from(*origin)
+                return (distance is None, distance if distance is not None else 0.0)
+            return sorted(qs, key=key)
+        return qs
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['origin'] = self._origin()
+        context['open_counts'] = open_window_counts()
+        return context
+
+
+class ExpertMyProfile(generics.RetrieveUpdateAPIView):
+    """A specialist's own listing: specialty, region, taking patients or not."""
+
+    serializer_class = ExpertSelfSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    http_method_names = ['get', 'head', 'options', 'patch']
+
+    def get_object(self):
+        if not _is_consultant(self.request.user):
+            raise PermissionDenied('Only specialists have a consultation profile.')
+        profile, _ = ExpertProfile.objects.get_or_create(user=self.request.user)
+        return profile
+
+
+class ExpertProfileDetail(generics.RetrieveUpdateAPIView):
+    """One specialist's listing; changing it is an administrator's call.
+
+    Verifying is the moment worth telling the specialist about, so the flip
+    notifies and lands in the audit log rather than being a silent checkbox.
+    """
+
+    serializer_class = ExpertProfileSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    http_method_names = ['get', 'head', 'options', 'patch']
+    queryset = ExpertProfile.objects.select_related('user', 'region')
+
+    def partial_update(self, request, *args, **kwargs):
+        if not _is_admin(request.user):
+            raise PermissionDenied('Only an administrator can change another specialist listing.')
+        profile = self.get_object()
+        response = super().partial_update(request, *args, **kwargs)
+        if 'is_verified' in request.data:
+            profile.refresh_from_db()
+            verified = profile.is_verified
+            send_notification(
+                profile.user, 'APPOINTMENT',
+                'You are verified' if verified else 'Verification withdrawn',
+                ('An administrator verified your specialist profile; the directory '
+                 'now shows the verified badge against your name.')
+                if verified else
+                'An administrator withdrew the verification on your specialist profile.',
+                related_object_type='ExpertProfile', related_object_id=profile.id,
+            )
+            _log(request, 'EXPERT_VERIFY',
+                 ('Verified specialist ' if verified else 'Unverified specialist ')
+                 + profile.user.username,
+                 target_type='ExpertProfile', target_id=profile.id)
+        return response

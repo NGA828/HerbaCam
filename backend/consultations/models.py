@@ -10,6 +10,8 @@ from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
+from geography.utils import haversine_km
+
 # A window is only truly claimed while a booking is still live; cancelled and
 # completed bookings must release it back to the diary.
 ACTIVE_APPOINTMENT_STATUSES = ['PENDING', 'CONFIRMED']
@@ -188,3 +190,47 @@ class Message(models.Model):
 
     def __str__(self):
         return f'{self.sender.username}: {self.body[:40]}'
+
+
+class ExpertProfile(models.Model):
+    """How a specialized expert gets found: what they consult on, where they
+    work, and whether an administrator has vouched for them.
+
+    The diagram's actor is a *specialized* expert that patients choose, and
+    geolocation is one of its use cases; neither is expressible on ``User``
+    alone. Verification is deliberately soft: an unverified specialist keeps
+    working, but the directory is where an approval becomes visible, so nothing
+    is locked out by a missing row.
+    """
+
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+                                related_name='consultant_profile')
+    region = models.ForeignKey('geography.Region', on_delete=models.SET_NULL,
+                               null=True, blank=True, related_name='expert_profiles')
+    specialization = models.CharField(max_length=120, blank=True, default='',
+                                      help_text='Short label patients filter by, e.g. "Maternal health".')
+    focus = models.TextField(blank=True, default='',
+                             help_text='What this specialist consults on, in their own words.')
+    is_verified = models.BooleanField(default=False,
+                                      help_text='An administrator has checked the credentials behind this profile.')
+    is_accepting_patients = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-is_verified', 'user__username']
+
+    def __str__(self):
+        return self.user.username + ' - ' + (self.specialization or 'no specialty set')
+
+    def distance_from(self, lat, lng):
+        """Kilometres from a point, measured to the region this specialist works
+        from. ``None`` when either side is unlocated, so a caller with no
+        location gets a usable listing instead of a bogus 0 km.
+        """
+        if self.region_id is None:
+            return None
+        if self.region.latitude is None or self.region.longitude is None:
+            return None
+        return round(haversine_km(lat, lng, float(self.region.latitude),
+                                  float(self.region.longitude)), 1)

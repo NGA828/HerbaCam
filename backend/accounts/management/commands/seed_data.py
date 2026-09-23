@@ -39,6 +39,7 @@ from notifications.models import Notification
 from preservation.models import RiskAssessment
 from audit.models import AuditLog
 from consultations.models import (
+    ExpertProfile,
     Appointment,
     AvailabilitySlot,
     Conversation,
@@ -197,6 +198,7 @@ class Command(BaseCommand):
         Conversation.objects.all().delete()
         Appointment.objects.all().delete()
         AvailabilitySlot.objects.all().delete()
+        ExpertProfile.objects.all().delete()
         ChatMessage.objects.all().delete()
         ChatSession.objects.all().delete()
         Feedback.objects.all().delete()
@@ -2604,6 +2606,45 @@ class Command(BaseCommand):
 
     # ------------------------------------------------------ consultations
 
+    def _expert_profiles(self, users):
+        """Attach a directory listing to every specialist.
+
+        Verification is mixed on purpose: one seeded specialist stays unverified
+        so the badge, the admin approval screen and the empty state each have
+        something real to show.
+        """
+        from geography.models import Region
+        listings = [
+            ('drnkeng', 'Centre', 'Ethnobotany and fever remedies',
+             'Thirty years of recorded Ewondo and Bassa preparations for febrile '
+             'illness, with the harvest season noted for each.', True),
+            ('dretoundi', 'Littoral', 'Malaria and bark preparations',
+             'Pharmacognosy work on antimalarial extracts, including the dosage '
+             'ranges that have documented evidence behind them.', True),
+            ('profeyong', 'West', 'Safety documentation and pregnancy care',
+             'Public health research on which remedies are safe to publish and '
+             'which need a warning attached.', False),
+        ]
+        regions = {r.name: r for r in Region.objects.all()}
+        made = 0
+        for username, region_name, specialization, focus, verified in listings:
+            user = users.get(username)
+            if user is None:
+                continue
+            ExpertProfile.objects.update_or_create(
+                user=user,
+                defaults={'region': regions.get(region_name),
+                          'specialization': specialization, 'focus': focus,
+                          'is_verified': verified, 'is_accepting_patients': True},
+            )
+            made += 1
+        # Anyone else with the role still needs a row; the post_save signal
+        # supplies it, and this makes a stale database fail here rather than in
+        # the directory.
+        for user in User.objects.filter(role=User.Role.EXPERT):
+            ExpertProfile.objects.get_or_create(user=user)
+        return made
+
     def _consultations(self, users):
         """Availability windows, bookings, and the threads attached to them.
 
@@ -3051,6 +3092,7 @@ class Command(BaseCommand):
         favorites = self._favorites(plants, users)
         notifications = self._notifications(users)
         risks = self._risk()
+        profile_count = self._expert_profiles(users)
         slot_count, appointment_count, message_count = self._consultations(users)
         feedback_count = self._feedback(users)
         chat_count = self._assistant(users)
@@ -3072,6 +3114,8 @@ class Command(BaseCommand):
         self.stdout.write(f'  Favorites:             {Favorite.objects.count()} (+{favorites} new)')
         self.stdout.write(f'  Notifications:         {Notification.objects.count()} (+{notifications} new)')
         self.stdout.write(f'  Risk assessments:      {RiskAssessment.objects.count()} ({risks} recalculated)')
+        self.stdout.write(f'  Specialist listings:   {profile_count} '
+                          f'({ExpertProfile.objects.filter(is_verified=True).count()} verified)')
         self.stdout.write(f'  Availability windows:  {slot_count} ({Appointment.objects.count()} appointments, {Message.objects.count()} messages)')
         self.stdout.write(f'  Feedback notes:        {feedback_count}')
         self.stdout.write(f'  Assistant chats:       {chat_count}')

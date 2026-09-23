@@ -49,6 +49,7 @@ venv\Scripts\activate.bat
 pip install -r requirements.txt
 python manage.py migrate
 python manage.py seed_data --clear   # Load demo data + copy plant images into backend/media/
+python manage.py check_identification   # optional: what the AI image path will actually do
 python manage.py runserver 0.0.0.0:8000
 ```
 
@@ -141,6 +142,18 @@ DB_PORT=3306
 # DATABASE_URL=mysql://root:your-mysql-password@127.0.0.1:3306/herbacam
 OPENROUTER_API_KEY=your-openrouter-key
 OPENROUTER_MODEL=google/gemini-3.8-flash
+# Only needed when the model above refuses image input: identification posts a
+# photo, and not every chat model accepts one. Check both ids without uploading:
+#   python backend/manage.py check_identification
+OPENROUTER_VISION_MODEL=
+# ICE servers handed to both sides when they join a video room. STUN only is fine
+# on one network; across carrier NAT you want a TURN relay, so this is a list in
+# settings, read from JSON in the environment, and never baked into the bundle.
+WEBRTC_ICE_SERVERS=[{"urls":"stun:stun.l.google.com:19908"}]
+# Extra "X-Herbacam-Token" credential used when a proxy strips Authorization.
+# Defaults to on under DEBUG and off otherwise. Leave it off in production: the
+# header is a bypass for a proxy defect, not an authentication scheme.
+AUTH_FALLBACK_HEADER=False
 ```
 
 ### Frontend (.env)
@@ -160,6 +173,11 @@ VITE_API_URL=/api
 
 ### For Registered Users
 - Upload plant images for AI identification
+- Choose a specialist by specialisation, by the verified badge, or by distance from
+  their own location, then book one of that specialist's open windows
+- Ask for a booked consultation to be moved to another of the same specialist's
+  windows; the window you leave goes back to the public list, and a move you asked
+  for needs the specialist's confirmation again
 - View identification history
 - Save favorite plants
 - Search by symptoms
@@ -177,6 +195,10 @@ VITE_API_URL=/api
 - Manage safety information
 - Manage plant information — add a species, edit or publish one, withdraw it
 - Manage articles for the public reading room (drafts stay invisible to readers)
+- Keep their own directory listing current — specialisation, region, and whether they
+  are taking patients at all; a specialist who is not taking patients disappears from
+  the booking page along with their windows
+- Confirm, complete, decline or move a booking from the consultation desk
 
 ### For Administrators
 - Manage users and roles
@@ -186,14 +208,22 @@ VITE_API_URL=/api
 - View analytics and preservation risk
 - Monitor audit logs
 - Manage articles and content
-- Oversee every consultation and its utilisation stats
+- Oversee every consultation and its utilisation stats, including which specialists
+  carry the verified badge on the booking page (verifying is an administrator's call,
+  and the specialist is notified either way)
 - Triage user feedback and reply to it (the author is notified)
 
 ### Consultations between patients and specialists
 - Specialists publish availability windows; overlapping or past windows are refused
+- Patients choose a specialist from a directory they can filter by specialisation,
+  by the verified badge, or by straight-line distance from their own location
 - Patients book an open window and state what they want to discuss
 - Specialists confirm, complete (with a closing note) or mark a no-show
-- Cancelling or completing returns the window to the pool automatically
+- Cancelling, completing or moving a booking returns the window to the pool automatically
+- A live booking can be moved to another of the same specialist's open windows. Asked for
+  by the patient it goes back to PENDING, because the new time still needs agreement; asked
+  for by the specialist it stays CONFIRMED. A booking never changes specialist by moving —
+  that is a cancellation plus a new request
 - Each appointment carries one messaging thread, visible only to its two participants
 - The thread doubles as the WebRTC signalling channel, so a video consultation
   runs peer-to-peer with no third-party room service
@@ -202,9 +232,10 @@ VITE_API_URL=/api
   handshake arriving out of order is what leaves a call stuck at "connecting"
 - Handshake payloads never appear in the chat pane, and leaving the room is
   announced to the other participant instead of leaving them with a frozen image
-- Media needs a direct path. With no TURN server configured, peers on one
-  network connect and a strict NAT falls back to chat — the room says so rather
-  than pretending
+- Media needs a direct path. The ICE list the room is built from is the deployment
+  setting `WEBRTC_ICE_SERVERS`, handed to both peers by the join call — with STUN only,
+  peers on one network connect and a strict NAT falls back to chat, which the room says
+  rather than pretending. Adding a `turn:` entry to that setting is the whole fix
 - Administrators see all consultations and platform-wide booking stats
 
 ### AI assistant
@@ -252,7 +283,7 @@ what puts `/api` in reach:
 
 ```bash
 python scripts/verify_endpoint_map.py --markdown docs/API_ENDPOINT_MAP.md
-# backend endpoints : 113 / frontend calls : 113 / matched 1:1 : 113
+# backend endpoints : 119 / frontend calls : 119 / matched 1:1 : 119
 # orphan endpoints  : 0   / unmatched calls : 0
 
 python scripts/smoke_endpoints.py          # logs in as every role and calls every route
@@ -307,12 +338,16 @@ Highlights:
 | /api/audit/ | GET | Audit trail (admin) |
 | /api/consultations/availability/ | GET/POST | Specialist's own windows |
 | /api/consultations/availability/:id/ | GET/PATCH/DELETE | One window (owner or admin) |
-| /api/consultations/slots/ | GET | Open windows patients may book |
+| /api/consultations/slots/ | GET | Open windows patients may book (suspended specialists excluded) |
+| /api/consultations/experts/ | GET | Specialist directory: `?specialization`, `?region`, `?lat&lng` |
+| /api/consultations/experts/me/ | GET/PATCH | The specialist's own listing (never their own badge) |
+| /api/consultations/experts/:id/ | GET/PATCH | Verify or suspend a listing (admin) |
 | /api/consultations/appointments/ | GET | Role-scoped appointments |
 | /api/consultations/appointments/book/ | POST | Book a window (row-locked) |
 | /api/consultations/appointments/:id/ | GET/PATCH | Detail / reason and notes |
 | /api/consultations/appointments/:id/status/ | POST | confirm · cancel · complete · no_show |
-| /api/consultations/appointments/:id/start/ | POST | Join the room, returns room id |
+| /api/consultations/appointments/:id/reschedule/ | POST | Move a live booking to another open window |
+| /api/consultations/appointments/:id/start/ | POST | Join the room: room id, thread id and ICE servers |
 | /api/consultations/conversations/ | GET | Threads the caller is part of |
 | /api/consultations/conversations/:id/messages/ | GET/POST | Read thread / post a line |
 | /api/consultations/conversations/:id/signal/ | GET/POST | WebRTC offer/answer/ICE relay |

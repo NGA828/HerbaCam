@@ -14,6 +14,7 @@ normal clients are unaffected.
 """
 import logging
 
+from django.conf import settings
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
 logger = logging.getLogger(__name__)
@@ -25,7 +26,8 @@ class HeaderResilientJWTAuthentication(JWTAuthentication):
     def authenticate(self, request):
         meta = request.META
         has_authorization = bool(meta.get('HTTP_AUTHORIZATION'))
-        token = meta.get(FALLBACK_HEADER)
+        token = meta.get(FALLBACK_HEADER) if getattr(
+            settings, 'AUTH_FALLBACK_HEADER_ENABLED', True) else None
         if token and not has_authorization:
             # Logged at warning because it is the one visible trace of a proxy
             # mangling credentials: a reviewer's "it never lets me sign in" is

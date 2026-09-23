@@ -47,7 +47,9 @@ def check(label, condition, detail=''):
     step += 1
     mark = 'PASS' if condition else 'FAIL'
     print(f'  {mark}  {label}' + (f'   → {detail}' if detail and not condition else ''))
-    return condition
+    # bool(): callers fold the result into `ok &= ...`, and a truthy id such as 4
+    # would AND out to zero and read as a failure the print does not show.
+    return bool(condition)
 
 
 ok = True
@@ -204,6 +206,80 @@ ok &= check('assistant degrades honestly without a key',
             status in (502, 201), f'{status} {res}')
 if status == 502:
     ok &= check('failed turn leaves no orphan session', True)
+
+
+# 19. the specialist directory the booking page filters on
+status, res = call('GET', '/api/consultations/experts/', patient)
+rows = res.get('results', res if isinstance(res, list) else [])
+listing = next((r for r in rows if r.get('username') == 'drnkeng'), {})
+ok &= check('directory lists the specialist with a specialisation',
+            bool(listing.get('specialization')), f'{status} {list(listing)[:8]}')
+ok &= check('a verified specialist carries the badge', listing.get('is_verified') is True, listing)
+ok &= check('the listing counts open windows', isinstance(listing.get('open_windows'), int), listing)
+status, res = call('GET', '/api/consultations/experts/?lat=3.87&lng=11.52', patient)
+rows = res.get('results', [])
+ok &= check('sharing a location reports how far each specialist is',
+            any(r.get('distance_km') is not None for r in rows), f'{status} {rows[:1]}')
+ok &= check('and orders them nearest first',
+            [r.get('distance_km') for r in rows if r.get('distance_km') is not None]
+            == sorted(d for d in (r.get('distance_km') for r in rows) if d is not None), rows)
+
+# 20. a specialist edits their listing, but cannot mint their own badge
+original_spec = listing.get('specialization', '')
+status, res = call('PATCH', '/api/consultations/experts/me/', expert,
+                   {'specialization': 'E2E fever and bark review', 'is_verified': False})
+ok &= check('specialist saves their own listing',
+            status == 200 and res.get('specialization') == 'E2E fever and bark review', f'{status} {res}')
+ok &= check('a specialist cannot change their own verification',
+            res.get('is_verified') is True, f'{status} {res}')
+call('PATCH', '/api/consultations/experts/me/', expert, {'specialization': original_spec})
+status, res = call('PATCH', '/api/consultations/experts/me/', patient, {'specialization': 'no'})
+ok &= check('a patient has no specialist listing to edit', status == 403, status)
+
+# 21. a live booking can be moved, and the window it leaves is freed
+morning = (datetime.now(timezone.utc) + timedelta(days=3)).replace(
+    hour=10, minute=0, second=0, microsecond=0)
+status, w1 = call('POST', '/api/consultations/availability/', expert, {
+    'starts_at': morning.isoformat(), 'ends_at': (morning + timedelta(minutes=30)).isoformat(),
+    'note': 'E2E reschedule A'})
+status, w2 = call('POST', '/api/consultations/availability/', expert, {
+    'starts_at': (morning + timedelta(hours=2)).isoformat(),
+    'ends_at': (morning + timedelta(hours=2, minutes=30)).isoformat(), 'note': 'E2E reschedule B'})
+ok &= check('two windows are published for the move',
+            bool(w1.get('id')) and bool(w2.get('id')), f'{w1} {w2}')
+status, moved = call('POST', '/api/consultations/appointments/book/', patient,
+                     {'slot': w1['id'], 'reason': 'E2E: plans may change.'})
+ok &= check('patient books the first window', status == 201, f'{status} {moved}')
+app_id = moved.get('id')
+call('POST', f'/api/consultations/appointments/{app_id}/status/', expert, {'action': 'confirm'})
+status, res = call('POST', f'/api/consultations/appointments/{app_id}/start/', patient)
+ok &= check('joining hands back the ICE servers from settings',
+            status == 200 and isinstance(res.get('ice_servers'), list) and bool(res['ice_servers']),
+            f'{status} {res}')
+status, res = call('POST', f'/api/consultations/appointments/{app_id}/reschedule/', patient,
+                   {'slot': w2['id'], 'reason': 'E2E: I am travelling that morning.'})
+ok &= check('patient moves the booking to the other window',
+            status == 200 and res.get('slot_detail', {}).get('id') == w2['id'], f'{status} {res}')
+ok &= check('a patient-initiated move needs confirming again',
+            res.get('status') == 'PENDING', res.get('status'))
+status, res = call('GET', f"/api/consultations/availability/{w1['id']}/", expert)
+ok &= check('the window the patient left is free again',
+            status == 200 and res.get('is_booked') is False, f'{status} {res}')
+status, res = call('POST', f'/api/consultations/appointments/{app_id}/reschedule/', patient,
+                   {'slot': w1['id']})
+ok &= check('a freed window can be moved back onto', status == 200, f'{status} {res}')
+call('POST', f'/api/consultations/appointments/{app_id}/status/', expert, {'action': 'confirm'})
+status, res = call('POST', f'/api/consultations/appointments/{app_id}/reschedule/', expert,
+                   {'slot': w2['id']})
+ok &= check('a specialist-initiated move stays confirmed',
+            status == 200 and res.get('status') == 'CONFIRMED', f'{status} {res}')
+status, res = call('POST', f'/api/consultations/appointments/{app_id}/reschedule/', other,
+                   {'slot': w1['id']})
+ok &= check('a stranger cannot move someone else\u2019s booking', status == 403, status)
+call('POST', f'/api/consultations/appointments/{app_id}/status/', patient,
+     {'action': 'cancel', 'reason': 'E2E cleanup'})
+call('DELETE', f"/api/consultations/availability/{w1['id']}/", expert)
+call('DELETE', f"/api/consultations/availability/{w2['id']}/", expert)
 
 # cleanup the probe window
 if slot_id:

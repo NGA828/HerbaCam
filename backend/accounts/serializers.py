@@ -14,9 +14,14 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         if attrs['password'] != attrs['password_confirm']:
             raise serializers.ValidationError({"password_confirm": "Passwords do not match."})
-        # Users can only register as USER or PRACTITIONER
-        if attrs.get('role') not in [User.Role.USER, User.Role.PRACTITIONER, None]:
-            raise serializers.ValidationError({"role": "You can only register as a User or Practitioner."})
+        # ADMIN never comes from a form. The diagram's patient, practitioner and
+        # specialized expert all sign themselves up; a new specialist starts
+        # unverified (see consultations.ExpertProfile) and only an administrator
+        # can change that, so the trust decision stays where it was.
+        if attrs.get('role') not in [User.Role.USER, User.Role.PRACTITIONER,
+                                     User.Role.EXPERT, None]:
+            raise serializers.ValidationError(
+                {"role": "Register as a User, a Practitioner or a specialized Expert."})
         return attrs
 
     def create(self, validated_data):

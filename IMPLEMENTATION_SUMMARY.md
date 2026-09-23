@@ -285,7 +285,7 @@ All pages are fully responsive:
 - 29 knowledge submissions spanning every workflow status
 - 42 AI identifications, 45 favorites, 80 notifications
 - 45 evidence and 32 safety records, 14 articles
-- ~14 availability windows with 7 appointments and 20 thread messages
+- 3 specialist directory listings (specialisation, region, verification) over ~14 availability windows with 7 appointments and 20 thread messages
 - 8 feedback notes and 12 sample assistant conversations
 
 **Demo Accounts:**
@@ -296,12 +296,13 @@ All pages are fully responsive:
 
 ## 🧪 Testing
 
-**119 backend tests**, all passing:
+**154 backend tests**, all passing:
 
 | Suite | Covers |
 | --- | --- |
-| `accounts` (26) | Users, roles, auth, register/login/profile, knowledge workflow, permissions, preservation risk, the proxy header fallback |
-| `consultations` (37) | Availability overlap rules, booking, double-booking, role-scoped visibility, status transitions, window release on cancel/complete, messaging, signalling order, thread excludes SDP, leave delivery, video-room gating, admin stats |
+| `accounts` (28) | Users, roles, auth, register/login/profile, knowledge workflow, permissions, preservation risk, the proxy header fallback, specialist self-registration |
+| `identification` (10) | Which model an image is sent to, the error text for each way that can fail, and the read-only config report |
+| `consultations` (60) | Availability overlap rules, booking, double-booking, role-scoped visibility, status transitions, window release on cancel/complete, reschedule (both directions, released window, stranger refused), the specialist directory: specialisation filter, region distance ordering, suspension hiding, who may verify, messaging, signalling order, thread excludes SDP, leave delivery, video-room gating, ICE servers handed to the room, admin stats |
 | `assistant` (17) | Grounding, citation ids, unpublished plants excluded, prompt assembly, provider failure paths, transcript scoping |
 | `feedback` (8) | Submission, queue restriction, self-resolution refusal, notify-once reply, rating bounds |
 | `geography` (6) | Nearest-region resolution, out-of-country handling, malformed coordinates |
@@ -311,9 +312,9 @@ All pages are fully responsive:
 
 Beyond `manage.py test`:
 
-- `scripts/verify_endpoint_map.py` — 113 backend routes ↔ 113 axios calls, no orphans
+- `scripts/verify_endpoint_map.py` — 119 backend routes ↔ 119 axios calls, no orphans
 - `scripts/smoke_endpoints.py` — every route called as every role against a live server
-- `scripts/e2e_consultations.py` — 30-step booking → confirm → join → signal → message → complete flow, including signal ordering, thread purity and leave propagation
+- `scripts/e2e_consultations.py` — 48-step booking → confirm → join → signal → message → complete flow, including signal ordering, thread purity, leave propagation, the specialist directory a patient filters, and a booking being moved between windows
 - `scripts/e2e_content_curation.py` — live proof of the plant/article curation grant (expert yes,
   practitioner/patient no, drafts invisible, symptom vocabulary admin-only); cleans up after itself
 - `frontend/scripts/ssr-smoke.mjs` (`npm run smoke:ssr`) — renders every page
@@ -535,12 +536,12 @@ Potential additions:
 
 ## 📊 Project Statistics
 
-- **Lines of Code**: ~21,230 (10,127 backend / 11,107 frontend)
+- **Lines of Code**: ~22,600 (11,078 backend excluding migrations / 11,540 frontend)
 - **Backend Apps**: 17
-- **Database Models**: 31
-- **API Endpoints**: 113 (each matched 1:1 to an axios binding)
+- **Database Models**: 33
+- **API Endpoints**: 119 (each matched 1:1 to an axios binding)
 - **Frontend Pages**: 26 modules, 33 page components (all SSR-verified)
-- **Tests**: 119 backend tests, all passing
+- **Tests**: 154 backend tests, all passing
 - **Seed Data**: 32 plants, 32 symptoms, 109 traditional uses
 
 ## 🏆 Key Achievements
@@ -553,7 +554,7 @@ Potential additions:
 ✅ Preservation risk analysis with 5-factor scoring
 ✅ Beautiful, responsive UI with modern design
 ✅ Peer-to-peer video consultations with no third-party room service
-✅ 119 passing backend tests plus endpoint-map, role-smoke, E2E and SSR render checks
+✅ 154 passing backend tests plus endpoint-map, role-smoke, E2E and SSR render checks
 ✅ Complete API documentation
 ✅ Demo data with realistic examples
 ✅ Security best practices implemented

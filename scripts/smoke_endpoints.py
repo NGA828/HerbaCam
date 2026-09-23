@@ -81,6 +81,14 @@ PROBES = [
     ('GET', '/api/consultations/conversations/{conversation}/messages/'),
     ('GET', '/api/consultations/conversations/{conversation}/signal/'),
     ('GET', '/api/consultations/stats/'),
+    # The specialist directory patients book from, and the listing a specialist
+    # owns (docs/USE_CASE_ANALYSIS.md: choose a specialized expert by specialty,
+    # region and verification).
+    ('GET', '/api/consultations/experts/'),
+    ('GET', '/api/consultations/experts/?specialization=fever'),
+    ('GET', '/api/consultations/experts/?lat=3.87&lng=11.52'),
+    ('GET', '/api/consultations/experts/me/'),
+    ('GET', '/api/consultations/experts/{expert_profile}/'),
     # AI assistant
     ('GET', '/api/assistant/'),
     ('GET', '/api/assistant/{chat}/messages/'),
@@ -160,6 +168,7 @@ def main() -> int:
     ids['slot'] = first_id('/api/consultations/slots/', token=user_token)
     ids['appointment'] = first_id('/api/consultations/appointments/?scope=all', token=admin_token)
     ids['conversation'] = first_id('/api/consultations/conversations/', token=admin_token)
+    ids['expert_profile'] = first_id('/api/consultations/experts/', token=user_token)
     ids['feedback'] = first_id('/api/feedback/', token=admin_token)
     ids['chat'] = first_id('/api/assistant/', token=admin_token)
     print('probe ids:', ids)

@@ -1,10 +1,12 @@
 """Tests for scheduling, consultations, and messaging."""
 from django.test import TestCase
 from django.utils import timezone
+from datetime import timedelta
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from accounts.models import User
+from geography.models import Region
 
 from .models import Appointment, AvailabilitySlot, Conversation, Message
 
@@ -435,3 +437,275 @@ class SlotReleaseModelTests(TestCase):
         slot = AvailabilitySlot.objects.create(
             expert=self.expert, starts_at=past, ends_at=past + timezone.timedelta(minutes=30))
         self.assertFalse(slot.is_open_to_patients())
+
+
+class ExpertDirectoryTests(APITestCase):
+    """Item: the diagram picks a *specialized* expert, by specialty and place."""
+
+    def setUp(self):
+        self.centre = Region.objects.create(name='Centre', latitude=3.87, longitude=11.52)
+        self.north = Region.objects.create(name='North', latitude=7.2, longitude=14.15)
+        self.near = User.objects.create_user(username='near_exp', password='pw', role=User.Role.EXPERT)
+        self.far = User.objects.create_user(username='far_exp', password='pw', role=User.Role.EXPERT)
+        self.patient = User.objects.create_user(username='pat_dir', password='pw', role=User.Role.USER)
+        self.admin = User.objects.create_user(username='adm_dir', password='pw', role=User.Role.ADMIN)
+        for profile_user, region, spec in [(self.near, self.centre, 'Fever and malaria'),
+                                           (self.far, self.north, 'Safety documentation')]:
+            profile = profile_user.consultant_profile
+            profile.region = region
+            profile.specialization = spec
+            profile.is_verified = True
+            profile.save()
+        start = timezone.now() + timedelta(hours=24)
+        AvailabilitySlot.objects.create(expert=self.near, starts_at=start,
+                                        ends_at=start + timedelta(minutes=30))
+        AvailabilitySlot.objects.create(expert=self.far, starts_at=start + timedelta(hours=3),
+                                        ends_at=start + timedelta(hours=3, minutes=30))
+
+    def _user(self, u):
+        return u.consultant_profile
+
+    def test_directory_lists_specialists_with_what_patients_filter_on(self):
+        res = self.client.get('/api/consultations/experts/')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        rows = res.data['results'] if isinstance(res.data, dict) else res.data
+        by_name = {row['username']: row for row in rows}
+        self.assertEqual(by_name['near_exp']['specialization'], 'Fever and malaria')
+        self.assertEqual(by_name['near_exp']['region_name'], 'Centre')
+        self.assertEqual(by_name['near_exp']['open_windows'], 1)
+
+    def test_specialization_filter_narrows_the_list(self):
+        res = self.client.get('/api/consultations/experts/?specialization=malaria')
+        rows = res.data['results'] if isinstance(res.data, dict) else res.data
+        self.assertEqual([row['username'] for row in rows], ['near_exp'])
+
+    def test_location_makes_it_nearest_first_and_reports_distance(self):
+        res = self.client.get('/api/consultations/experts/?lat=3.9&lng=11.6')
+        rows = res.data['results'] if isinstance(res.data, dict) else res.data
+        self.assertEqual([row['username'] for row in rows], ['near_exp', 'far_exp'])
+        self.assertIsNotNone(rows[0]['distance_km'])
+        self.assertLess(rows[0]['distance_km'], rows[1]['distance_km'])
+
+    def test_a_suspended_specialist_disappears_from_patients(self):
+        self._user(self.far).is_accepting_patients = False
+        self._user(self.far).save()
+        res = self.client.get('/api/consultations/experts/')
+        rows = res.data['results'] if isinstance(res.data, dict) else res.data
+        self.assertNotIn('far_exp', [row['username'] for row in rows])
+
+        self.client.force_authenticate(user=self.patient)
+        res = self.client.get('/api/consultations/slots/')
+        self.assertNotIn('far_exp', [row['expert_name'] for row in res.data['results']])
+
+        self.client.force_authenticate(user=self.admin)
+        res = self.client.get('/api/consultations/experts/')
+        rows = res.data['results'] if isinstance(res.data, dict) else res.data
+        self.assertIn('far_exp', [row['username'] for row in rows])
+
+    def test_an_unverified_specialist_is_listed_but_flagged(self):
+        self._user(self.near).is_verified = False
+        self._user(self.near).save()
+        res = self.client.get('/api/consultations/experts/')
+        rows = res.data['results'] if isinstance(res.data, dict) else res.data
+        self.assertFalse([r for r in rows if r['username'] == 'near_exp'][0]['is_verified'])
+
+
+class ExpertProfilePermissionTests(APITestCase):
+    def setUp(self):
+        self.expert = User.objects.create_user(username='self_exp', password='pw', role=User.Role.EXPERT)
+        self.other = User.objects.create_user(username='other_exp', password='pw', role=User.Role.EXPERT)
+        self.patient = User.objects.create_user(username='pat_prof', password='pw', role=User.Role.USER)
+        self.admin = User.objects.create_user(username='adm_prof', password='pw', role=User.Role.ADMIN)
+        self.region = Region.objects.create(name='Littoral', latitude=4.05, longitude=9.7)
+
+    def test_specialist_sets_their_own_listing(self):
+        self.client.force_authenticate(user=self.expert)
+        res = self.client.patch('/api/consultations/experts/me/',
+                                {'specialization': 'Wound care', 'region': self.region.pk},
+                                format='json')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.expert.consultant_profile.refresh_from_db()
+        self.assertEqual(self.expert.consultant_profile.specialization, 'Wound care')
+        self.assertEqual(self.expert.consultant_profile.region_id, self.region.pk)
+
+    def test_a_specialist_cannot_verify_themselves(self):
+        self.client.force_authenticate(user=self.expert)
+        self.client.patch('/api/consultations/experts/me/',
+                          {'specialization': 'x', 'is_verified': True}, format='json')
+        self.expert.consultant_profile.refresh_from_db()
+        self.assertFalse(self.expert.consultant_profile.is_verified)
+
+    def test_a_patient_has_no_specialist_listing(self):
+        self.client.force_authenticate(user=self.patient)
+        self.assertEqual(self.client.get('/api/consultations/experts/me/').status_code,
+                         status.HTTP_403_FORBIDDEN)
+
+    def test_only_an_admin_may_change_another_listing(self):
+        profile = self.other.consultant_profile
+        self.client.force_authenticate(user=self.expert)
+        res = self.client.patch(f'/api/consultations/experts/{profile.pk}/',
+                                {'is_verified': True}, format='json')
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+        self.client.force_authenticate(user=self.admin)
+        res = self.client.patch(f'/api/consultations/experts/{profile.pk}/',
+                                {'is_verified': True}, format='json')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        profile.refresh_from_db()
+        self.assertTrue(profile.is_verified)
+
+    def test_verification_notifies_the_specialist_and_is_audited(self):
+        from audit.models import AuditLog
+        from notifications.models import Notification
+        profile = self.other.consultant_profile
+        self.client.force_authenticate(user=self.admin)
+        self.client.patch(f'/api/consultations/experts/{profile.pk}/',
+                          {'is_verified': True}, format='json')
+        self.assertTrue(Notification.objects.filter(user=self.other).exists())
+        self.assertTrue(AuditLog.objects.filter(action='EXPERT_VERIFY').exists())
+
+    def test_a_profile_exists_for_every_expert_without_being_created_twice(self):
+        from consultations.models import ExpertProfile
+        fresh = User.objects.create_user(username='brand_new_exp', password='pw',
+                                         role=User.Role.EXPERT)
+        self.assertEqual(ExpertProfile.objects.filter(user=fresh).count(), 1)
+
+
+class ConsultationTransportTests(APITestCase):
+    """Item: TURN/STUN must be a deployment setting, not a bundle literal."""
+
+    def setUp(self):
+        self.expert = User.objects.create_user(username='ice_exp', password='pw', role=User.Role.EXPERT)
+        self.patient = User.objects.create_user(username='ice_pat', password='pw', role=User.Role.USER)
+        start = timezone.now() + timedelta(hours=2)
+        self.slot = AvailabilitySlot.objects.create(expert=self.expert, starts_at=start,
+                                                    ends_at=start + timedelta(minutes=30))
+
+    def test_join_hands_back_the_configured_ice_servers(self):
+        self.client.force_authenticate(user=self.patient)
+        booked = self.client.post('/api/consultations/appointments/book/',
+                                  {'slot': self.slot.pk, 'reason': 'ice'}, format='json')
+        self.assertEqual(booked.status_code, status.HTTP_201_CREATED)
+        appointment_id = booked.data['id']
+        self.client.force_authenticate(user=self.expert)
+        self.client.post(f'/api/consultations/appointments/{appointment_id}/status/',
+                         {'action': 'confirm'}, format='json')
+        self.client.force_authenticate(user=self.patient)
+        res = self.client.post(f'/api/consultations/appointments/{appointment_id}/start/')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data['ice_servers'], [{'urls': 'stun:stun.l.google.com:19908'}])
+
+    def test_a_turn_relay_can_be_added_without_touching_the_client(self):
+        from django.test import override_settings
+        relay = [{'urls': 'stun:stun.example.cm:3478'},
+                 {'urls': 'turn:turn.example.cm:3478', 'username': 'u', 'credential': 'c'}]
+        self.client.force_authenticate(user=self.patient)
+        booked = self.client.post('/api/consultations/appointments/book/',
+                                  {'slot': self.slot.pk, 'reason': 'ice2'}, format='json')
+        appointment_id = booked.data['id']
+        self.client.force_authenticate(user=self.expert)
+        self.client.post(f'/api/consultations/appointments/{appointment_id}/status/',
+                         {'action': 'confirm'}, format='json')
+        self.client.force_authenticate(user=self.patient)
+        with override_settings(WEBRTC_ICE_SERVERS=relay):
+            res = self.client.post(f'/api/consultations/appointments/{appointment_id}/start/')
+        self.assertEqual(res.data['ice_servers'], relay)
+
+
+class RescheduleTests(APITestase if False else APITestCase):
+    """Item: "manage appointments" has to include moving one, not just cancelling."""
+
+    def setUp(self):
+        self.expert = User.objects.create_user(username='rs_exp', password='pw', role=User.Role.EXPERT)
+        self.other_expert = User.objects.create_user(username='rs_exp2', password='pw', role=User.Role.EXPERT)
+        self.patient = User.objects.create_user(username='rs_pat', password='pw', role=User.Role.USER)
+        self.bystander = User.objects.create_user(username='rs_by', password='pw', role=User.Role.USER)
+        base = timezone.now() + timedelta(hours=24)
+        self.slot_a = self._slot(self.expert, base)
+        self.slot_b = self._slot(self.expert, base + timedelta(hours=3))
+        self.slot_taken = self._slot(self.expert, base + timedelta(hours=6))
+        self.slot_foreign = self._slot(self.other_expert, base + timedelta(hours=9))
+        self.client.force_authenticate(user=self.patient)
+        booked = self.client.post('/api/consultations/appointments/book/',
+                                  {'slot': self.slot_a.pk, 'reason': 'first'}, format='json')
+        self.assertEqual(booked.status_code, status.HTTP_201_CREATED)
+        self.appointment_id = booked.data['id']
+        self.client.force_authenticate(user=self.expert)
+        self.client.post(f'/api/consultations/appointments/{self.appointment_id}/status/',
+                         {'action': 'confirm'}, format='json')
+
+    @staticmethod
+    def _slot(expert, starts_at):
+        return AvailabilitySlot.objects.create(expert=expert, starts_at=starts_at,
+                                                ends_at=starts_at + timedelta(minutes=30))
+
+    def _move(self, slot, expected=None, user=None, data=None):
+        self.client.force_authenticate(user=user or self.patient)
+        res = self.client.post(f'/api/consultations/appointments/{self.appointment_id}/reschedule/',
+                               data if data is not None else {'slot': slot.pk}, format='json')
+        if expected is not None:
+            self.assertEqual(res.status_code, expected)
+        return res
+
+    def test_a_patient_move_releases_the_old_window_and_asks_again(self):
+        res = self._move(self.slot_b, expected=status.HTTP_200_OK)
+        self.assertEqual(res.data['status'], 'PENDING')
+        self.assertEqual(res.data['slot_detail']['id'], self.slot_b.pk)
+        self.slot_a.refresh_from_db()
+        self.assertTrue(self.slot_a.is_open_to_patients())
+        self.slot_b.refresh_from_db()
+        self.assertFalse(self.slot_b.is_open_to_patients())
+
+    def test_a_specialist_move_keeps_the_confirmation(self):
+        res = self._move(self.slot_b, expected=status.HTTP_200_OK, user=self.expert)
+        self.assertEqual(res.data['status'], 'CONFIRMED')
+
+    def test_the_thread_records_the_move(self):
+        self._move(self.slot_b, expected=status.HTTP_200_OK, data={'slot': self.slot_b.pk,
+                                                                   'reason': 'I am travelling that day'})
+        appointment = Appointment.objects.get(pk=self.appointment_id)
+        last = appointment.conversation.messages.order_by('-id').first()
+        self.assertIn('Moved from', last.body)
+        self.assertIn('travelling', last.body)
+
+    def test_a_window_cannot_be_moved_onto_someone_else(self):
+        res = self._move(self.slot_foreign, expected=status.HTTP_400_BAD_REQUEST)
+        self.assertIn('same specialist', str(res.data))
+
+    def test_a_taken_window_is_refused(self):
+        self.client.force_authenticate(user=self.bystander)
+        taken = self.client.post('/api/consultations/appointments/book/',
+                                 {'slot': self.slot_taken.pk}, format='json')
+        self.assertEqual(taken.status_code, status.HTTP_201_CREATED)
+        res = self._move(self.slot_taken, expected=status.HTTP_400_BAD_REQUEST)
+        self.assertIn('no longer bookable', str(res.data))
+
+    def test_the_same_window_is_not_a_move(self):
+        res = self._move(self.slot_a, expected=status.HTTP_400_BAD_REQUEST)
+        self.assertIn('already on this window', str(res.data))
+
+    def test_a_finished_appointment_cannot_be_moved(self):
+        self.client.force_authenticate(user=self.expert)
+        self.client.post(f'/api/consultations/appointments/{self.appointment_id}/status/',
+                         {'action': 'complete', 'note': 'done'}, format='json')
+        res = self._move(self.slot_b, expected=status.HTTP_400_BAD_REQUEST)
+        self.assertIn('Cannot move', str(res.data))
+
+    def test_a_stranger_cannot_reschedule_someone_elses_appointment(self):
+        res = self._move(self.slot_b, user=self.bystander)
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_the_released_window_can_be_booked_by_someone_else(self):
+        self._move(self.slot_b, expected=status.HTTP_200_OK)
+        self.client.force_authenticate(user=self.bystander)
+        res = self.client.post('/api/consultations/appointments/book/',
+                               {'slot': self.slot_a.pk}, format='json')
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+
+    def test_the_move_is_notified_and_audited(self):
+        from audit.models import AuditLog
+        from notifications.models import Notification
+        self._move(self.slot_b, expected=status.HTTP_200_OK)
+        self.assertTrue(Notification.objects.filter(user=self.expert,
+                                                    type='APPOINTMENT_RESCHEDULED').exists())
+        self.assertTrue(AuditLog.objects.filter(action='APPOINTMENT_RESCHEDULE').exists())
