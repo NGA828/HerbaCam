@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { Mail, Lock, AlertCircle, Loader2 } from 'lucide-react';
 import { LogoMark } from '../components/Logo';
-
+// Demo credentials for the seeded database (see backend: manage.py seed_data).
 const demoAccounts = [
   { username: 'admin', password: 'admin123!', label: 'Admin' },
   { username: 'drnkeng', password: 'expert123!', label: 'Expert' },

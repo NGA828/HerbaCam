@@ -4,7 +4,8 @@ Seed database with demo data for Ancestor development.
 The dataset is deliberately large enough to exercise every screen of the
 application: public discovery, AI identification history, the practitioner
 contribution workflow, expert review, evidence/safety curation, preservation
-risk and the admin audit trail.
+risk, the consultation scheduler (availability, bookings, video rooms and
+messaging), user feedback and the AI assistant, and the admin audit trail.
 
 All data is clearly labeled as demo/sample data and must never be treated as
 medical advice.
@@ -37,6 +38,15 @@ from analytics.models import Favorite
 from notifications.models import Notification
 from preservation.models import RiskAssessment
 from audit.models import AuditLog
+from consultations.models import (
+    ExpertProfile,
+    Appointment,
+    AvailabilitySlot,
+    Conversation,
+    Message,
+)
+from feedback.models import Feedback
+from assistant.models import ChatSession, ChatMessage
 
 SEED_IMAGE_DIRS = [
     os.path.join(settings.MEDIA_ROOT, 'plants'),
@@ -183,6 +193,15 @@ class Command(BaseCommand):
 
     def _clear(self):
         self.stdout.write('Clearing existing demo records…')
+        # Children before parents: messages need their thread gone first.
+        Message.objects.all().delete()
+        Conversation.objects.all().delete()
+        Appointment.objects.all().delete()
+        AvailabilitySlot.objects.all().delete()
+        ExpertProfile.objects.all().delete()
+        ChatMessage.objects.all().delete()
+        ChatSession.objects.all().delete()
+        Feedback.objects.all().delete()
         RiskAssessment.objects.all().delete()
         Favorite.objects.all().delete()
         Notification.objects.all().delete()
@@ -2584,6 +2603,217 @@ class Command(BaseCommand):
                     self._stamp(favorite, 'created_at', now - timedelta(days=RANDOM.randint(1, 150)))
         return created
 
+
+    # ------------------------------------------------------ consultations
+
+    def _expert_profiles(self, users):
+        """Attach a directory listing to every specialist.
+
+        Verification is mixed on purpose: one seeded specialist stays unverified
+        so the badge, the admin approval screen and the empty state each have
+        something real to show.
+        """
+        from geography.models import Region
+        listings = [
+            ('drnkeng', 'Centre', 'Ethnobotany and fever remedies',
+             'Thirty years of recorded Ewondo and Bassa preparations for febrile '
+             'illness, with the harvest season noted for each.', True),
+            ('dretoundi', 'Littoral', 'Malaria and bark preparations',
+             'Pharmacognosy work on antimalarial extracts, including the dosage '
+             'ranges that have documented evidence behind them.', True),
+            ('profeyong', 'West', 'Safety documentation and pregnancy care',
+             'Public health research on which remedies are safe to publish and '
+             'which need a warning attached.', False),
+        ]
+        regions = {r.name: r for r in Region.objects.all()}
+        made = 0
+        for username, region_name, specialization, focus, verified in listings:
+            user = users.get(username)
+            if user is None:
+                continue
+            ExpertProfile.objects.update_or_create(
+                user=user,
+                defaults={'region': regions.get(region_name),
+                          'specialization': specialization, 'focus': focus,
+                          'is_verified': verified, 'is_accepting_patients': True},
+            )
+            made += 1
+        # Anyone else with the role still needs a row; the post_save signal
+        # supplies it, and this makes a stale database fail here rather than in
+        # the directory.
+        for user in User.objects.filter(role=User.Role.EXPERT):
+            ExpertProfile.objects.get_or_create(user=user)
+        return made
+
+    def _consultations(self, users):
+        """Availability windows, bookings, and the threads attached to them.
+
+        Windows are seeded into the future so patients see something bookable,
+        and per-expert windows never overlap — the same rule the API enforces.
+        """
+        experts = [u for u in users.values() if u.role == User.Role.EXPERT]
+        patients = [u for u in users.values()
+                    if u.role in (User.Role.USER, User.Role.PRACTITIONER)]
+        if not experts or not patients:
+            return 0, 0, 0
+
+        now = timezone.now()
+        slots = 0
+        for expert in experts:
+            day = now + timedelta(days=1)
+            for window in range(RANDOM.randint(3, 6)):
+                # Whole hours on the hour, two hours apart: no overlaps.
+                start = (day + timedelta(hours=9 + window * 2)).replace(
+                    minute=0, second=0, microsecond=0)
+                AvailabilitySlot.objects.create(
+                    expert=expert,
+                    starts_at=start,
+                    ends_at=start + timedelta(minutes=RANDOM.choice([30, 45, 60])),
+                    note=RANDOM.choice([
+                        '', 'Follow-ups only', 'First consultation',
+                        'New patients welcome',
+                    ]),
+                )
+                slots += 1
+            day = day + timedelta(days=RANDOM.randint(1, 3))
+
+        open_slots = list(AvailabilitySlot.objects.select_related('expert'))
+        statuses = [
+            Appointment.Status.PENDING,
+            Appointment.Status.CONFIRMED,
+            Appointment.Status.CONFIRMED,
+            Appointment.Status.COMPLETED,
+            Appointment.Status.CANCELLED,
+            Appointment.Status.NO_SHOW,
+        ]
+        reasons = [
+            'I have been using a bitter-leaf preparation for weeks and want a second opinion.',
+            'Asking whether the neem decoction my family uses is safe alongside medication.',
+            'Curious how elders in the North West prepare moringa for children.',
+            'Want to record what my grandfather taught me about bark preparations.',
+            'Asking about the correct part of the plant for the cough preparation.',
+        ]
+        appointments = 0
+        messages = 0
+        # Book only about half, so the patient-facing booking screen still has
+        # genuinely open windows to offer after seeding.
+        to_book = max(1, min(len(open_slots) // 2, 14))
+        for slot in RANDOM.sample(open_slots, k=to_book):
+            patient = RANDOM.choice(patients)
+            status = RANDOM.choice(statuses)
+            appointment = Appointment.objects.create(
+                patient=patient, expert=slot.expert, slot=slot,
+                reason=RANDOM.choice(reasons), status=status,
+            )
+            self._stamp(appointment, 'created_at',
+                        now - timedelta(days=RANDOM.randint(0, 40)))
+            if status in (Appointment.Status.COMPLETED, Appointment.Status.CONFIRMED):
+                appointment.started_at = slot.starts_at
+                if status == Appointment.Status.COMPLETED:
+                    appointment.completed_at = slot.starts_at + timedelta(minutes=30)
+                    appointment.expert_notes = RANDOM.choice([
+                        'Advised the family preparation, and to stop if nausea appears.',
+                        'Discussed safety; recommended seeing a clinician before continuing.',
+                        'Confirmed the reported dose is what is traditionally used here.',
+                    ])
+                appointment.save()
+            appointments += 1
+
+            conversation = Conversation.objects.create(appointment=appointment)
+            for turn in range(RANDOM.randint(0, 4)):
+                sender = patient if turn % 2 == 0 else slot.expert
+                Message.objects.create(
+                    conversation=conversation, sender=sender, kind=Message.Kind.TEXT,
+                    body=RANDOM.choice([
+                        'Hello — I would like to keep this to the preparation questions.',
+                        'Of course. Which part of the plant are you using?',
+                        'The leaves, boiled. My father always did it that way.',
+                        'That matches what is documented here. I will note it on the record.',
+                        'Thank you. Should I bring anything to the session?',
+                    ]),
+                )
+                messages += 1
+
+        # Leave a few windows unbooked so the booking screen has real options.
+        return slots, appointments, messages
+
+    # -------------------------------------------------------------- feedback
+
+    def _feedback(self, users):
+        notes = [
+            (Feedback.Category.BUG, 'The identification upload silently fails for HEIC photos.'),
+            (Feedback.Category.BUG, 'Map markers disappear when I switch to Plants view twice in a row.'),
+            (Feedback.Category.SUGGESTION, 'Please add a French translation — most of my family reads French only.'),
+            (Feedback.Category.SUGGESTION, 'It would help to see which region each use came from, side by side.'),
+            (Feedback.Category.CONTENT, 'The preparation listed for Voacanga looks wrong for our community.'),
+            (Feedback.Category.DATA, 'Please document Mucuna pruriens — it is used a lot near Ngambe.'),
+            (Feedback.Category.DATA, 'Bafang is missing as a community under West Region.'),
+            (Feedback.Category.OTHER, 'Thank you for keeping the disclaimers visible. This is useful.'),
+        ]
+        admins = [u for u in users.values() if u.role == User.Role.ADMIN]
+        others = [u for u in users.values() if u.role != User.Role.ADMIN]
+        now = timezone.now()
+        created = 0
+        for index, (category, message) in enumerate(notes):
+            feedback = Feedback.objects.create(
+                user=RANDOM.choice(others), category=category, message=message,
+                rating=RANDOM.choice([None, 3, 4, 5, 5]),
+                page=RANDOM.choice(['/identify', '/map', '/plants', '/about']),
+            )
+            self._stamp(feedback, 'created_at', now - timedelta(days=1 + index * 3))
+            if index % 3 == 0 and admins:
+                feedback.status = Feedback.Status.RESOLVED
+                feedback.admin_response = 'Fixed in this release — thank you for reporting it.'
+                feedback.resolved_at = now - timedelta(days=index)
+                feedback.save()
+            created += 1
+        return created
+
+    # -------------------------------------------------------------- assistant
+
+    def _assistant(self, users):
+        """A few sample conversations so the chat history UI is not empty.
+
+        The assistant lines are demo text, not model output. They restate what
+        the seeded records say and keep the educational framing intact.
+        """
+        samples = [
+            (
+                'Which plants does the knowledge base document for fever?',
+                'The records here associate several species with fever, most often '
+                'Neem (Azadirachta indica) and Bitter leaf (Vernonia amygdalina), '
+                'both usually prepared as a leaf decoction. Every entry shows its '
+                'verification status, and traditional use is not proof of efficacy. '
+                'Anyone with a persistent fever should see a health professional.',
+            ),
+            (
+                'Is neem safe in pregnancy?',
+                'The safety record attached to neem in this knowledge base flags a '
+                'pregnancy warning, so it is documented as one to avoid in that '
+                'situation. I am describing what contributors recorded, not giving '
+                'medical advice — please confirm with a qualified clinician.',
+            ),
+            (
+                'What moringa is traditionally used for?',
+                'Moringa appears mainly as a nutritious leaf and a preparation for '
+                'general weakness, with reported doses recorded per use. The pages '
+                'list the plant part, preparation, and the region each record came from.',
+            ),
+        ]
+        people = [u for u in users.values() if u.role in (User.Role.USER, User.Role.PRACTITIONER)]
+        if not people:
+            return 0
+        now = timezone.now()
+        created = 0
+        for person in RANDOM.sample(people, k=min(len(people), 5)):
+            for question, answer in RANDOM.sample(samples, k=RANDOM.randint(1, len(samples))):
+                session = ChatSession.objects.create(user=person, title=question[:80])
+                self._stamp(session, 'created_at', now - timedelta(days=RANDOM.randint(1, 30)))
+                ChatMessage.objects.create(session=session, role='USER', content=question)
+                ChatMessage.objects.create(session=session, role='ASSISTANT', content=answer)
+                created += 1
+        return created
+
     # ------------------------------------------------------------ notifications
 
     def _notifications(self, users):
@@ -2862,6 +3092,10 @@ class Command(BaseCommand):
         favorites = self._favorites(plants, users)
         notifications = self._notifications(users)
         risks = self._risk()
+        profile_count = self._expert_profiles(users)
+        slot_count, appointment_count, message_count = self._consultations(users)
+        feedback_count = self._feedback(users)
+        chat_count = self._assistant(users)
         audits = self._audit(users)
         self._settings(users)
 
@@ -2880,5 +3114,10 @@ class Command(BaseCommand):
         self.stdout.write(f'  Favorites:             {Favorite.objects.count()} (+{favorites} new)')
         self.stdout.write(f'  Notifications:         {Notification.objects.count()} (+{notifications} new)')
         self.stdout.write(f'  Risk assessments:      {RiskAssessment.objects.count()} ({risks} recalculated)')
+        self.stdout.write(f'  Specialist listings:   {profile_count} '
+                          f'({ExpertProfile.objects.filter(is_verified=True).count()} verified)')
+        self.stdout.write(f'  Availability windows:  {slot_count} ({Appointment.objects.count()} appointments, {Message.objects.count()} messages)')
+        self.stdout.write(f'  Feedback notes:        {feedback_count}')
+        self.stdout.write(f'  Assistant chats:       {chat_count}')
         self.stdout.write(f'  Audit logs:            {AuditLog.objects.count()} (+{audits} new)')
         self.stdout.write(self.style.WARNING('  ⚠ All data is DEMO/SAMPLE data — not medical advice.'))

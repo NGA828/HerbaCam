@@ -136,6 +136,16 @@ def encode_image_to_base64(image_file):
     return base64.b64encode(image_data).decode('utf-8')
 
 
+def active_model():
+    """The model id image identification will be sent to.
+
+    A separate setting exists because the identify path posts a base64 image and
+    not every chat model accepts image input. Unset ``OPENROUTER_VISION_MODEL``
+    keeps using ``OPENROUTER_MODEL``, so existing deployments see no change.
+    """
+    return (settings.OPENROUTER_VISION_MODEL or settings.OPENROUTER_MODEL).strip()
+
+
 def identify_plant(image_file):
     """
     Send plant image to OpenRouter for AI identification.
@@ -173,7 +183,7 @@ def identify_plant(image_file):
     }
     
     payload = {
-        "model": settings.OPENROUTER_MODEL,
+        "model": active_model(),
         "response_format": {"type": "json_object"},
         "messages": [
             {
@@ -253,7 +263,9 @@ def identify_plant(image_file):
         if status_code == 404:
             return {
                 'success': False,
-                'error': f'OpenRouter could not find model "{settings.OPENROUTER_MODEL}". Update OPENROUTER_MODEL in backend/.env.',
+                'error': (f'OpenRouter could not find model "{active_model()}". '
+                          'Update OPENROUTER_VISION_MODEL, or OPENROUTER_MODEL if that '
+                          'is unset, in backend/.env.'),
             }
         if status_code == 429:
             return {
@@ -264,6 +276,14 @@ def identify_plant(image_file):
             return {
                 'success': False,
                 'error': 'OpenRouter is temporarily unavailable. Please try again in a moment.',
+            }
+        if status_code == 400 and not settings.OPENROUTER_VISION_MODEL:
+            return {
+                'success': False,
+                'error': (f'OpenRouter rejected the request: '
+                          f'{provider_error or "unknown provider error"}. '
+                          f'"{active_model()}" may not accept image input — set '
+                          f'OPENROUTER_VISION_MODEL in backend/.env to a model that does.'),
             }
         return {
             'success': False,

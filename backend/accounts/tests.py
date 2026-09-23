@@ -176,10 +176,12 @@ class PermissionTest(APITestCase):
         )
 
     def test_user_cannot_manage_users(self):
+        # The endpoint is IsAdministrator-only, so a plain user is refused at
+        # the door. Asserting 200-with-an-empty-list here would have passed
+        # even if the queryset leaked every account.
         self.client.force_authenticate(user=self.user)
         res = self.client.get('/api/auth/users/')
-        self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(res.data.get('results', res.data)), 0)
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_admin_can_manage_users(self):
         self.client.force_authenticate(user=self.admin)
@@ -206,3 +208,73 @@ class PreservationRiskTest(TestCase):
         assessment = calculate_plant_risk(self.plant)
         # Plant with no contributions should be high risk
         self.assertGreater(assessment.risk_score, 50)
+
+
+class HeaderResilientAuthTests(APITestCase):
+    """The hosted preview proxy eats ``Authorization``; the fallback must not.
+
+    Without this, a reviewer opening the deployed preview is silently treated as
+    anonymous — which reads as a stale deployment rather than a proxy quirk.
+    """
+
+    def setUp(self):
+        from rest_framework_simplejwt.tokens import RefreshToken
+        self.user = User.objects.create_user(
+            username='hdr_user', password='test1234!', role=User.Role.USER)
+        self.other = User.objects.create_user(
+            username='hdr_other', password='test1234!', role=User.Role.USER)
+        self.access = str(RefreshToken.for_user(self.user).access_token)
+        self.other_access = str(RefreshToken.for_user(self.other).access_token)
+
+    def test_fallback_header_authenticates_when_authorization_is_absent(self):
+        res = self.client.get('/api/auth/profile/', HTTP_X_HERBACAM_TOKEN=self.access)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data['username'], 'hdr_user')
+
+    def test_authorization_keeps_priority_when_both_are_present(self):
+        res = self.client.get(
+            '/api/auth/profile/',
+            HTTP_AUTHORIZATION=f'Bearer {self.other_access}',
+            HTTP_X_HERBACAM_TOKEN=self.access)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data['username'], 'hdr_other')
+
+    def test_a_bad_authorization_header_is_not_repaired_by_the_fallback(self):
+        res = self.client.get(
+            '/api/auth/profile/',
+            HTTP_AUTHORIZATION='Bearer not-a-jwt',
+            HTTP_X_HERBACAM_TOKEN=self.access)
+        self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_no_credentials_still_refuses(self):
+        res = self.client.get('/api/auth/profile/')
+        self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_fallback_header_cannot_be_used_to_write_without_a_token(self):
+        res = self.client.patch('/api/auth/profile/', {'bio': 'injected'},
+                                format='json')
+        self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class SpecialistSelfRegistrationTests(APITestCase):
+    """The diagram lets the specialized expert register; ADMIN still cannot."""
+
+    def test_expert_registration_creates_an_unverified_listing(self):
+        from consultations.models import ExpertProfile
+        res = self.client.post('/api/auth/register/', {
+            'username': 'new_specialist', 'email': 'ns@example.com',
+            'first_name': 'New', 'last_name': 'Specialist',
+            'password': 'specialistpw', 'password_confirm': 'specialistpw', 'role': 'EXPERT',
+        }, format='json')
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        profile = ExpertProfile.objects.get(user__username='new_specialist')
+        self.assertFalse(profile.is_verified)
+        self.assertTrue(profile.is_accepting_patients)
+
+    def test_admin_role_still_cannot_come_from_a_form(self):
+        res = self.client.post('/api/auth/register/', {
+            'username': 'sneaky', 'email': 'sneaky@example.com',
+            'password': 'specialistpw', 'password_confirm': 'specialistpw', 'role': 'ADMIN',
+        }, format='json')
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('role', res.data)

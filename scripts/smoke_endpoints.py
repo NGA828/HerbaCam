@@ -71,6 +71,32 @@ PROBES = [
     ('GET', '/api/knowledge/submissions/pending/'),
     ('GET', '/api/practitioners/profile/'),
     ('GET', '/api/practitioners/list/'),
+    # Consultations: availability, bookings, threads, oversight
+    ('GET', '/api/consultations/slots/'),
+    ('GET', '/api/consultations/availability/'),
+    ('GET', '/api/consultations/availability/{slot}/'),
+    ('GET', '/api/consultations/appointments/'),
+    ('GET', '/api/consultations/appointments/{appointment}/'),
+    ('GET', '/api/consultations/conversations/'),
+    ('GET', '/api/consultations/conversations/{conversation}/messages/'),
+    ('GET', '/api/consultations/conversations/{conversation}/signal/'),
+    ('GET', '/api/consultations/stats/'),
+    # The specialist directory patients book from, and the listing a specialist
+    # owns (docs/USE_CASE_ANALYSIS.md: choose a specialized expert by specialty,
+    # region and verification).
+    ('GET', '/api/consultations/experts/'),
+    ('GET', '/api/consultations/experts/?specialization=fever'),
+    ('GET', '/api/consultations/experts/?lat=3.87&lng=11.52'),
+    ('GET', '/api/consultations/experts/me/'),
+    ('GET', '/api/consultations/experts/{expert_profile}/'),
+    # AI assistant
+    ('GET', '/api/assistant/'),
+    ('GET', '/api/assistant/{chat}/messages/'),
+    # Feedback
+    ('GET', '/api/feedback/'),
+    ('GET', '/api/feedback/{feedback}/'),
+    # Geolocation (public)
+    ('GET', '/api/geography/locate/?lat=3.87&lng=11.52'),
 ]
 
 # Statuses that count as a healthy answer for a role.
@@ -107,8 +133,8 @@ def login(username, password):
     return data['access']
 
 
-def first_id(path, key='results'):
-    status, data = call('GET', path)
+def first_id(path, key='results', token=None):
+    status, data = call('GET', path, token)
     results = data.get(key) if isinstance(data, dict) else data
     if results:
         return results[0]['id']
@@ -138,6 +164,13 @@ def main() -> int:
     ids['identification'] = (hist.get('results') or [{}])[0].get('id')
     status, subs = call('GET', '/api/knowledge/submissions/', admin_token)
     ids['submission'] = (subs.get('results') or [{}])[0].get('id')
+    # These routes are all authenticated, so resolve them with a token.
+    ids['slot'] = first_id('/api/consultations/slots/', token=user_token)
+    ids['appointment'] = first_id('/api/consultations/appointments/?scope=all', token=admin_token)
+    ids['conversation'] = first_id('/api/consultations/conversations/', token=admin_token)
+    ids['expert_profile'] = first_id('/api/consultations/experts/', token=user_token)
+    ids['feedback'] = first_id('/api/feedback/', token=admin_token)
+    ids['chat'] = first_id('/api/assistant/', token=admin_token)
     print('probe ids:', ids)
 
     failures = 0

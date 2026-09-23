@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import {
   Activity, BadgeCheck, BookOpen, CalendarDays, Check, ChevronDown, Globe, ShieldCheck,
   ClipboardList, Code, FlaskConical, Landmark, Leaf, MapPin, Pencil, Plus, Save,
@@ -17,7 +17,15 @@ import {
   FormPanel, KpiCard, Skeleton, StatusBadge, TableCard, Td, Th, Card,
   btnPrimary, btnSecondary, formatDate, formatDateTime, inputCls, selectCls, useList,
 } from '../components/admin/ui';
-import { generatedFor, plantImage } from '../utils/images';
+import { plantImage, withImageFallback } from '../utils/images';
+
+// The plant and article workspaces are mounted under /admin/ for administrators
+// and under /expert/ for specialist curators, so the header eyebrow follows
+// whoever opened it instead of asserting an admin context that is not there.
+function useCurationEyebrow() {
+  const { pathname } = useLocation();
+  return pathname.startsWith('/expert') ? 'Expert curation' : 'Administration';
+}
 
 /* Shared bits used across the admin suite ----------------------------------- */
 
@@ -67,6 +75,7 @@ const emptyPlant = { scientific_name: '', common_name: '', family: '', genus: ''
 
 export function PlantsManagement() {
   const { data, loading, error, reload } = useList(() => plantsAPI.adminList({ page_size: 200 }));
+  const eyebrow = useCurationEyebrow();
   const [q, setQ] = useState('');
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -139,7 +148,7 @@ export function PlantsManagement() {
   return (
     <div className="space-y-6">
       <AdminHeader
-        eyebrow="Administration"
+        eyebrow={eyebrow}
         title="Plant library"
         description="Curate the species database. Changes publish immediately to the public plant directory and every dependent record."
         icon={Sprout}
@@ -234,7 +243,7 @@ export function PlantsManagement() {
                             src={plantImage(p)}
                             alt={p.common_name || p.scientific_name}
                             className="h-full w-full object-cover"
-                            onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = generatedFor(p); }}
+                            onError={withImageFallback(p)}
                           />
                         </div>
                         <div className="min-w-0">
@@ -374,6 +383,7 @@ const emptyArticle = { title: '', summary: '', content: '', category: null, is_p
 
 export function ArticlesManagement() {
   const { data, loading, error, reload } = useList(() => articlesAPI.adminList({ page_size: 200 }));
+  const eyebrow = useCurationEyebrow();
   const { data: categories } = useList(() => articlesAPI.categories());
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -443,7 +453,7 @@ export function ArticlesManagement() {
   return (
     <div className="space-y-6">
       <AdminHeader
-        eyebrow="Administration"
+        eyebrow={eyebrow}
         title="Educational articles"
         description="Publish field notes, plant profiles, and preservation stories to the public reading room."
         icon={BookOpen}

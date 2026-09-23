@@ -7,7 +7,8 @@ import { LogoMark } from '../components/Logo';
 import {
   Home, Leaf, Search, Camera, Heart, Clock, BookOpen, User, Bell,
   Menu, X, LogOut, ChevronDown, FileText, BarChart3, Shield,
-  Users, MapPin, AlertTriangle, ClipboardCheck, Plus, Map
+  Users, MapPin, AlertTriangle, ClipboardCheck, Plus, Map,
+  Video, CalendarPlus, Sparkles, MessageSquareWarning,
 } from 'lucide-react';
 
 const navItems = {
@@ -19,6 +20,9 @@ const navItems = {
     { path: '/user/favorites', label: 'Favorites', icon: Heart },
     { path: '/user/history', label: 'History', icon: Clock },
     { path: '/articles', label: 'Articles', icon: BookOpen },
+    { path: '/user/book', label: 'Book Consultation', icon: CalendarPlus },
+    { path: '/user/appointments', label: 'My Appointments', icon: Video },
+    { path: '/assistant', label: 'Ask Ancestor', icon: Sparkles },
     { path: '/user/notifications', label: 'Notifications', icon: Bell },
     { path: '/user/profile', label: 'Profile', icon: User },
   ],
@@ -35,10 +39,14 @@ const navItems = {
     { path: '/expert/dashboard', label: 'Dashboard', icon: Home },
     { path: '/expert/reviews', label: 'Pending Reviews', icon: ClipboardCheck },
     { path: '/expert/knowledge', label: 'Knowledge', icon: FileText },
+    { path: '/expert/plants', label: 'Plant Library', icon: Leaf },
+    { path: '/expert/articles', label: 'Articles', icon: BookOpen },
     { path: '/expert/evidence', label: 'Evidence', icon: BarChart3 },
     { path: '/expert/safety', label: 'Safety', icon: Shield },
     { path: '/expert/preservation', label: 'Preservation', icon: AlertTriangle },
+    { path: '/expert/desk', label: 'Consultation Desk', icon: Video },
     { path: '/expert/analytics', label: 'Analytics', icon: BarChart3 },
+    { path: '/assistant', label: 'Ask Ancestor', icon: Sparkles },
     { path: '/expert/notifications', label: 'Notifications', icon: Bell },
     { path: '/expert/profile', label: 'Profile', icon: User },
   ],
@@ -54,6 +62,8 @@ const navItems = {
     { path: '/admin/geography', label: 'Geography', icon: MapPin },
     { path: '/admin/preservation', label: 'Preservation', icon: AlertTriangle },
     { path: '/admin/analytics', label: 'Analytics', icon: BarChart3 },
+    { path: '/admin/consultations', label: 'Consultations', icon: Video },
+    { path: '/admin/feedback', label: 'Feedback', icon: MessageSquareWarning },
     { path: '/admin/audit', label: 'Audit Logs', icon: Shield },
   ],
 };

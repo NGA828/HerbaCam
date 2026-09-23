@@ -30,6 +30,9 @@ def api_root(request):
             'analytics': '/api/analytics/',
             'preservation': '/api/preservation/',
             'audit': '/api/audit/',
+            'consultations': '/api/consultations/',
+            'assistant': '/api/assistant/',
+            'feedback': '/api/feedback/',
         }
     })
 
@@ -51,6 +54,9 @@ urlpatterns = [
     path('api/analytics/', include('analytics.urls')),
     path('api/preservation/', include('preservation.urls')),
     path('api/audit/', include('audit.urls')),
+    path('api/consultations/', include('consultations.urls')),
+    path('api/assistant/', include('assistant.urls')),
+    path('api/feedback/', include('feedback.urls')),
 ]
 
 if settings.DEBUG:

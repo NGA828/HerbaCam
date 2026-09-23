@@ -1,6 +1,7 @@
 """
 Django settings for Ancestor project.
 """
+import json
 import os
 import re
 import urllib.parse
@@ -56,6 +57,9 @@ INSTALLED_APPS = [
     'audit',
     'analytics',
     'preservation',
+    'consultations',
+    'assistant',
+    'feedback',
 ]
 
 MIDDLEWARE = [
@@ -162,7 +166,9 @@ CORS_ALLOW_ALL_ORIGINS = True
 # REST Framework
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        # Subclass of SimpleJWT's class: identical checks, plus it can read the
+        # token from X-Herbacam-Token when a proxy eats Authorization.
+        'config.authentication.HeaderResilientJWTAuthentication',
     ),
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticatedOrReadOnly',
@@ -180,6 +186,9 @@ REST_FRAMEWORK = {
         'anon': '1000/hour',
         'user': '5000/hour',
         'ai_identification': '30/hour',
+        # Assistant turns are a model call each; 60/hour allows a real
+        # conversation without letting one account run the bill up.
+        'ai_chat': '60/hour',
     },
 }
 
@@ -191,9 +200,29 @@ SIMPLE_JWT = {
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
+# Accept the bearer token from X-Herbacam-Token when Authorization never
+# arrives (some preview/review proxies strip it). On by default only while
+# DEBUG is on: turn it off once you know the chain forwards headers intact —
+# see backend/config/authentication.py and the README's proxy section.
+AUTH_FALLBACK_HEADER_ENABLED = os.getenv(
+    'AUTH_FALLBACK_HEADER', str(DEBUG)).lower() == 'true'
+
+# WebRTC transport
+# STUN only tells each peer the other's direct address, which is enough on one
+# network; across a strict NAT a TURN relay is required and there is no relay
+# provisioned here. It is a setting rather than a literal in a component so a
+# deployment can add one without rebuilding the frontend bundle.
+WEBRTC_ICE_SERVERS = json.loads(os.getenv('WEBRTC_ICE_SERVERS', '[]')) or [
+    {'urls': 'stun:stun.l.google.com:19908'},
+]
+
 # OpenRouter API
 OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY', '')
 OPENROUTER_MODEL = os.getenv('OPENROUTER_MODEL', 'google/gemini-3.8-flash')
+# Plant identification posts an image, and not every chat model on OpenRouter
+# accepts image input. Pin a vision-capable model here when the text model above
+# is refused; left empty, image calls use OPENROUTER_MODEL unchanged.
+OPENROUTER_VISION_MODEL = (os.getenv('OPENROUTER_VISION_MODEL', '') or '').strip() or None
 OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1'
 
 # Image upload settings

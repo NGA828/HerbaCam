@@ -28,7 +28,8 @@ export default function RegisterPage() {
     try {
       const user = await register(form);
       toast.success('Account created', `Welcome to Ancestor, ${user.first_name || user.username}!`);
-      navigate(user.role === 'PRACTITIONER' ? '/practitioner/dashboard' : '/dashboard');
+      navigate(user.role === 'PRACTITIONER' ? '/practitioner/dashboard'
+        : user.role === 'EXPERT' ? '/expert/dashboard' : '/dashboard');
     } catch (err) {
       const data = err.response?.data;
       if (typeof data === 'object' && !Array.isArray(data)) {
@@ -95,7 +96,15 @@ export default function RegisterPage() {
                 className="w-full px-3 py-2.5 bg-stone-50 border border-stone-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none">
                 <option value="USER">Regular User</option>
                 <option value="PRACTITIONER">Traditional Medicine Practitioner</option>
+                <option value="EXPERT">Specialized Expert</option>
               </select>
+              {form.role === 'EXPERT' && (
+                <p className="mt-2 text-xs text-stone-500">
+                  Specialists publish availability and answer bookings from the consultation desk.
+                  Your public listing starts without a verified badge — an administrator checks the
+                  credentials you publish before it appears.
+                </p>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-stone-700 mb-1">Password</label>

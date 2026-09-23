@@ -34,6 +34,10 @@ api.interceptors.request.use((config) => {
   const token = localStorage.getItem('access_token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
+    // Some preview/review proxies drop Authorization on the way through, which
+    // makes a logged-in session look logged out. The same token is mirrored
+    // here; see backend/config/authentication.py for the server-side half.
+    config.headers['X-Herbacam-Token'] = token;
   }
   return config;
 });
@@ -53,6 +57,7 @@ api.interceptors.response.use(
           const res = await authAPI.refreshToken(refreshToken);
           localStorage.setItem('access_token', res.data.access);
           originalRequest.headers.Authorization = `Bearer ${res.data.access}`;
+          originalRequest.headers['X-Herbacam-Token'] = res.data.access;
           return api(originalRequest);
         } catch {
           localStorage.removeItem('access_token');
@@ -160,6 +165,7 @@ export const geographyAPI = {
   deleteRegion: (id) => api.delete(`/geography/regions/${id}/`),
   createDivision: (data) => api.post('/geography/divisions/', data),
   createCommunity: (data) => api.post('/geography/communities/', data),
+  locate: (lat, lng) => api.get('/geography/locate/', { params: { lat, lng } }),
 };
 
 // Articles API
@@ -209,6 +215,56 @@ export const usersAPI = {
   list: (params) => api.get('/auth/users/', { params }),
   detail: (id) => api.get(`/auth/users/${id}/`),
   update: (id, data) => api.patch(`/auth/users/${id}/`, data),
+};
+
+// Consultations API - availability, bookings, video rooms and messages
+export const consultationsAPI = {
+  availability: (params) => api.get('/consultations/availability/', { params }),
+  createAvailability: (data) => api.post('/consultations/availability/', data),
+  availabilityDetail: (id) => api.get(`/consultations/availability/${id}/`),
+  updateAvailability: (id, data) => api.patch(`/consultations/availability/${id}/`, data),
+  deleteAvailability: (id) => api.delete(`/consultations/availability/${id}/`),
+  slots: (params) => api.get('/consultations/slots/', { params }),
+  // Specialist directory: what each consultant specialises in, where they are,
+  // and whether the team has verified them (docs/USE_CASE_ANALYSIS.md).
+  experts: (params) => api.get('/consultations/experts/', { params }),
+  myExpertProfile: () => api.get('/consultations/experts/me/'),
+  updateMyExpertProfile: (data) => api.patch('/consultations/experts/me/', data),
+  expertProfile: (id) => api.get(`/consultations/experts/${id}/`),
+  updateExpertProfile: (id, data) => api.patch(`/consultations/experts/${id}/`, data),
+  appointments: (params) => api.get('/consultations/appointments/', { params }),
+  book: (data) => api.post('/consultations/appointments/book/', data),
+  appointmentDetail: (id) => api.get(`/consultations/appointments/${id}/`),
+  updateAppointment: (id, data) => api.patch(`/consultations/appointments/${id}/`, data),
+  setAppointmentStatus: (id, data) => api.post(`/consultations/appointments/${id}/status/`, data),
+  reschedule: (id, data) => api.post(`/consultations/appointments/${id}/reschedule/`, data),
+  startConsultation: (id) => api.post(`/consultations/appointments/${id}/start/`),
+  conversations: () => api.get('/consultations/conversations/'),
+  messages: (id, params) => api.get(`/consultations/conversations/${id}/messages/`, { params }),
+  sendMessage: (id, data) => api.post(`/consultations/conversations/${id}/messages/`, data),
+  signals: (id, params) => api.get(`/consultations/conversations/${id}/signal/`, { params }),
+  sendSignal: (id, data) => api.post(`/consultations/conversations/${id}/signal/`, data),
+  markThreadRead: (id) => api.post(`/consultations/conversations/${id}/read/`),
+  stats: () => api.get('/consultations/stats/'),
+};
+
+// Assistant API - grounded "chat with AI"
+export const assistantAPI = {
+  sessions: () => api.get('/assistant/'),
+  createSession: (data) => api.post('/assistant/', data),
+  ask: (data) => api.post('/assistant/ask/', data),
+  sessionDetail: (id) => api.get(`/assistant/${id}/`),
+  deleteSession: (id) => api.delete(`/assistant/${id}/`),
+  sessionMessages: (id) => api.get(`/assistant/${id}/messages/`),
+  archiveSession: (id, data) => api.patch(`/assistant/${id}/archive/`, data),
+};
+
+// Feedback API - "Send feedback" and the administrator triage queue
+export const feedbackAPI = {
+  queue: (params) => api.get('/feedback/', { params }),
+  send: (data) => api.post('/feedback/send/', data),
+  detail: (id) => api.get(`/feedback/${id}/`),
+  update: (id, data) => api.patch(`/feedback/${id}/`, data),
 };
 
 // Practitioners API

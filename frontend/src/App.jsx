@@ -39,6 +39,16 @@ import {
 } from './pages/AdminWorkspaces';
 import ExpertAnalyticsPage from './pages/ExpertAnalyticsPage';
 import SymptomDetailPage from './pages/SymptomDetailPage';
+import AssistantPage from './pages/AssistantPage';
+import {
+  AdminConsultationsPage,
+  BookAppointmentPage,
+  ConsultantDeskPage,
+  ConsultationRoomPage,
+  MyAppointmentsPage,
+} from './pages/ConsultationsPages';
+import FeedbackQueuePage from './pages/FeedbackQueuePage';
+import FeedbackWidget from './components/FeedbackWidget';
 
 function ProtectedRoute({ children, roles }) {
   const { user, loading } = useAuth();
@@ -90,6 +100,12 @@ function AppRoutes() {
         <Route path="/user/plants/:id" element={<PlantDetailPage />} />
         <Route path="/user/notifications" element={<NotificationsPage />} />
 
+        {/* Consultations: patients book, both parties meet in the room */}
+        <Route path="/assistant" element={<AssistantPage />} />
+        <Route path="/user/book" element={<BookAppointmentPage />} />
+        <Route path="/user/appointments" element={<MyAppointmentsPage />} />
+        <Route path="/user/consultation/:id" element={<ConsultationRoomPage basePath="/user" />} />
+
         {/* Practitioner routes */}
         <Route path="/practitioner/dashboard" element={
           <ProtectedRoute roles={['PRACTITIONER', 'ADMIN']}><PractitionerDashboard /></ProtectedRoute>
@@ -118,8 +134,21 @@ function AppRoutes() {
         <Route path="/expert/preservation" element={<ProtectedRoute roles={['EXPERT', 'ADMIN']}><PreservationPage /></ProtectedRoute>} />
         <Route path="/expert/analytics" element={<ProtectedRoute roles={['EXPERT', 'ADMIN']}><ExpertAnalyticsPage /></ProtectedRoute>} />
         <Route path="/expert/knowledge" element={<ProtectedRoute roles={['EXPERT', 'ADMIN']}><KnowledgeManagement /></ProtectedRoute>} />
+        {/* The use-case diagram gives the specialized expert `manage plant
+           information` and `manage articles`, so both workspaces are mounted
+           here as well as under /admin/. */}
+        <Route path="/expert/plants" element={<ProtectedRoute roles={['EXPERT', 'ADMIN']}><PlantsManagement /></ProtectedRoute>} />
+        <Route path="/expert/plants/new" element={<ProtectedRoute roles={['EXPERT', 'ADMIN']}><PlantsManagement /></ProtectedRoute>} />
+        <Route path="/expert/plants/:id/edit" element={<ProtectedRoute roles={['EXPERT', 'ADMIN']}><PlantsManagement /></ProtectedRoute>} />
+        <Route path="/expert/articles" element={<ProtectedRoute roles={['EXPERT', 'ADMIN']}><ArticlesManagement /></ProtectedRoute>} />
         <Route path="/expert/notifications" element={<ProtectedRoute roles={['EXPERT', 'ADMIN']}><NotificationsPage /></ProtectedRoute>} />
         <Route path="/expert/profile" element={<ProtectedRoute roles={['EXPERT', 'ADMIN']}><ProfilePage /></ProtectedRoute>} />
+        <Route path="/expert/desk" element={
+          <ProtectedRoute roles={['EXPERT', 'ADMIN']}><ConsultantDeskPage /></ProtectedRoute>
+        } />
+        <Route path="/expert/consultation/:id" element={
+          <ProtectedRoute roles={['EXPERT', 'ADMIN']}><ConsultationRoomPage basePath="/expert" /></ProtectedRoute>
+        } />
 
         {/* Admin routes */}
         <Route path="/admin/dashboard" element={
@@ -146,6 +175,8 @@ function AppRoutes() {
         <Route path="/admin/audit" element={<ProtectedRoute roles={['ADMIN']}><AuditLogs /></ProtectedRoute>} />
         <Route path="/admin/audit-logs" element={<ProtectedRoute roles={['ADMIN']}><AuditLogs /></ProtectedRoute>} />
         <Route path="/admin/settings" element={<ProtectedRoute roles={['ADMIN']}><SettingsPage /></ProtectedRoute>} />
+        <Route path="/admin/consultations" element={<ProtectedRoute roles={['ADMIN']}><AdminConsultationsPage /></ProtectedRoute>} />
+        <Route path="/admin/feedback" element={<ProtectedRoute roles={['ADMIN']}><FeedbackQueuePage /></ProtectedRoute>} />
       </Route>
 
       {/* Catch-all */}
@@ -163,6 +194,7 @@ export default function App() {
             <ConfirmProvider>
               <AppRoutes />
               <ToastViewport />
+              <FeedbackWidget />
             </ConfirmProvider>
           </ToastProvider>
         </NotificationProvider>

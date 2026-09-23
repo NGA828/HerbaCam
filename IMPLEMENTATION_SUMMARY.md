@@ -6,7 +6,17 @@ HerbaCam is a comprehensive AI-powered web application for identifying, document
 
 ## ✅ Implementation Status: COMPLETE
 
-All 53 phases of the specification have been successfully implemented.
+Every use case in the ANCESTOR use-case diagram now has an implementation:
+authenticate, update profile, view notification, chat with AI, identify plant
+using AI, book appointment, send feedback, view map information, manage
+articles, manage plant information, manage appointments, update availability,
+view messages, conduct video consultation, manage user accounts, view
+statistics, view consultations and update map info.
+
+Two external actors from the diagram are honoured without adding a paid
+dependency: **OPEN AI** through OpenRouter (identification + assistant), and
+**GEOLOCALISATION API** through the browser's geolocation API resolved against
+the platform's own region coordinates.
 
 ## 🏗️ Architecture
 
@@ -15,18 +25,21 @@ All 53 phases of the specification have been successfully implemented.
 **Frontend:**
 - React 19 with Vite 8
 - Tailwind CSS v4 for styling
-- React Router v6 for navigation
+- React Router v7 for navigation
 - Axios for API communication
 - Leaflet for interactive maps
 - Recharts for data visualization
 - Lucide React for icons
 
 **Backend:**
-- Django 5.2.17 with Django REST Framework
+- Django 4.2 LTS with Django REST Framework
+  (4.2 is pinned deliberately: Django 5 requires MariaDB 10.11+/MySQL 8.0.11+,
+  and the project targets the MariaDB 10.4 shipped with XAMPP/WAMP)
 - SQLite (development) / MySQL-ready
 - JWT authentication with SimpleJWT
 - CORS headers for cross-origin requests
 - Pillow for image processing
+- Browser WebRTC for consultations (no third-party room service)
 - python-dotenv for environment management
 
 **AI Integration:**
@@ -47,7 +60,7 @@ Django REST API (Port 8000)
     └─→ Media Storage (Plant Images)
 ```
 
-## 📊 Database Models (14 Apps)
+## 📊 Database Models (17 Apps)
 
 1. **accounts** - Custom User model with roles (USER, PRACTITIONER, EXPERT, ADMIN)
 2. **plants** - Plant, PlantLocalName, PlantPart
@@ -63,6 +76,9 @@ Django REST API (Port 8000)
 12. **audit** - AuditLog for tracking actions
 13. **analytics** - Favorite plants tracking
 14. **preservation** - RiskAssessment with 5-factor scoring
+15. **consultations** - AvailabilitySlot, Appointment, Conversation, Message
+16. **assistant** - ChatSession, ChatMessage (grounded AI chat)
+17. **feedback** - Feedback notes with administrator triage
 
 ## 🔐 Authentication & Authorization
 
@@ -80,16 +96,19 @@ Django REST API (Port 8000)
    - View submission status
    - Edit rejected submissions
 
-3. **EXPERT** - Knowledge reviewer
+3. **EXPERT** - Knowledge reviewer and content curator
    - Review pending submissions
    - Approve/reject knowledge
    - Manage evidence and safety records
+   - Manage plant information (create, edit, publish, withdraw)
+   - Manage articles (draft, publish, withdraw)
    - View preservation analytics
 
 4. **ADMIN** - System administrator
    - Full system access
    - User management
-   - Content moderation
+   - Content moderation, including the shared symptom vocabulary that experts
+     read but cannot rewrite
    - System configuration
 
 ### Security Features
@@ -219,6 +238,14 @@ DRAFT → SUBMITTED → UNDER_REVIEW → APPROVED → PUBLISHED
 - Review interface with approve/reject
 - Evidence management
 - Safety information management
+- Consultation desk: publish availability, confirm/complete/no-show requests
+- Video consultation room with the appointment's message thread
+
+### Patient / registered user
+- Book a consultation from published windows
+- Cancel a booking, follow the thread, join the room when confirmed
+- Ask the assistant, with links to the plants each answer cites
+- Send feedback from any screen
 
 ### Admin Dashboard
 - System statistics
@@ -227,6 +254,8 @@ DRAFT → SUBMITTED → UNDER_REVIEW → APPROVED → PUBLISHED
 - Knowledge oversight
 - Analytics and preservation risk
 - Audit logs
+- Consultation oversight (all bookings, utilisation stats)
+- Feedback triage with replies
 
 ## 📱 Responsive Design
 
@@ -249,14 +278,15 @@ All pages are fully responsive:
 
 ## 📊 Seed Data
 
-**Demo Data Included:**
-- 8 medicinal plants (Azadirachta indica, Moringa oleifera, Prunus africana, etc.)
-- 12 symptoms (Malaria, Cough, Fever, etc.)
-- 16 traditional uses
-- 10 regions of Cameroon
-- 6 preparation methods
-- 4 educational articles
-- Evidence and safety records
+**Demo Data Included** (`seed_data --clear`, deterministic):
+- 32 medicinal plants with local names, parts and images
+- 32 symptoms across 16 categories, 109 traditional uses
+- 10 regions / 40 divisions / 120 communities (the real Cameroonian tree)
+- 29 knowledge submissions spanning every workflow status
+- 42 AI identifications, 45 favorites, 80 notifications
+- 45 evidence and 32 safety records, 14 articles
+- 3 specialist directory listings (specialisation, region, verification) over ~14 availability windows with 7 appointments and 20 thread messages
+- 8 feedback notes and 12 sample assistant conversations
 
 **Demo Accounts:**
 - Admin: admin / admin123!
@@ -266,16 +296,39 @@ All pages are fully responsive:
 
 ## 🧪 Testing
 
-**21 Backend Tests:**
-- User model tests
-- Authentication tests (register, login, profile)
-- Plant API tests (list, detail, search)
-- Symptom search tests
-- Knowledge workflow tests (submit, approve, reject)
-- Permission tests
-- Preservation risk calculation tests
+**154 backend tests**, all passing:
 
-**All tests passing ✅**
+| Suite | Covers |
+| --- | --- |
+| `accounts` (28) | Users, roles, auth, register/login/profile, knowledge workflow, permissions, preservation risk, the proxy header fallback, specialist self-registration |
+| `identification` (10) | Which model an image is sent to, the error text for each way that can fail, and the read-only config report |
+| `consultations` (60) | Availability overlap rules, booking, double-booking, role-scoped visibility, status transitions, window release on cancel/complete, reschedule (both directions, released window, stranger refused), the specialist directory: specialisation filter, region distance ordering, suspension hiding, who may verify, messaging, signalling order, thread excludes SDP, leave delivery, video-room gating, ICE servers handed to the room, admin stats |
+| `assistant` (17) | Grounding, citation ids, unpublished plants excluded, prompt assembly, provider failure paths, transcript scoping |
+| `feedback` (8) | Submission, queue restriction, self-resolution refusal, notify-once reply, rating bounds |
+| `geography` (6) | Nearest-region resolution, out-of-country handling, malformed coordinates |
+| `plants` (11) | Expert/admin plant curation, practitioner and patient denial, audit trail, drafts never published, public catalogue unaffected |
+| `articles` (9) | Expert authorship, publish/withdraw with timestamp, delete rights, draft invisibility to readers |
+| `symptoms` (5) | The deliberately narrower vocabulary: experts read it, only administrators rename it |
+
+Beyond `manage.py test`:
+
+- `scripts/verify_endpoint_map.py` — 119 backend routes ↔ 119 axios calls, no orphans
+- `scripts/smoke_endpoints.py` — every route called as every role against a live server
+- `scripts/e2e_consultations.py` — 48-step booking → confirm → join → signal → message → complete flow, including signal ordering, thread purity, leave propagation, the specialist directory a patient filters, and a booking being moved between windows
+- `scripts/e2e_content_curation.py` — live proof of the plant/article curation grant (expert yes,
+  practitioner/patient no, drafts invisible, symptom vocabulary admin-only); cleans up after itself
+- `frontend/scripts/ssr-smoke.mjs` (`npm run smoke:ssr`) — renders every page
+  component under SSR: 32 render clean, and `MapPage` is skipped because leaflet
+  touches `window` at import time (a harness limitation, not a bug)
+
+The SSR harness exists for a specific reason: a free identifier (a JSX tag with
+no import) is **not** a module-resolution error, so `vite build` succeeds and
+the page throws `ReferenceError` at runtime. It caught five such crashes that
+were in the repo already — `Navbar`, `Footer`, `LoginPage`, `RegisterPage` and
+`DashboardLayout` each referenced `Leaf`/`LogoMark` without importing it, which
+white-screened every public page and every dashboard. They are fixed, and
+`AdminWorkspaces` now uses the `withImageFallback` helper it already imported
+instead of calling the un-imported `generatedFor`.
 
 ## 📝 API Endpoints
 
@@ -473,8 +526,9 @@ Potential additions:
 - Offline mode with PWA
 - Advanced map visualizations
 - Community forums
-- Multilingual support
-- Advanced analytics dashboard
+- Multilingual support (French/English — Cameroon is bilingual, and this is the
+  most natural next step; there is currently no i18n layer)
+- TURN/STUN configuration for peer-to-peer calls that traverse strict NATs
 - Export functionality (PDF reports)
 - Integration with botanical databases
 - Machine learning model training
@@ -482,24 +536,25 @@ Potential additions:
 
 ## 📊 Project Statistics
 
-- **Lines of Code**: ~15,000+
-- **Backend Apps**: 14
-- **Database Models**: 30+
-- **API Endpoints**: 50+
-- **Frontend Pages**: 20+
-- **React Components**: 30+
-- **Tests**: 21 (all passing)
-- **Seed Data**: 8 plants, 12 symptoms, 16 traditional uses
+- **Lines of Code**: ~22,600 (11,078 backend excluding migrations / 11,540 frontend)
+- **Backend Apps**: 17
+- **Database Models**: 33
+- **API Endpoints**: 119 (each matched 1:1 to an axios binding)
+- **Frontend Pages**: 26 modules, 33 page components (all SSR-verified)
+- **Tests**: 154 backend tests, all passing
+- **Seed Data**: 32 plants, 32 symptoms, 109 traditional uses
 
 ## 🏆 Key Achievements
 
-✅ Complete implementation of all 53 specification phases
+✅ Every use case in the ANCESTOR diagram implemented and reachable
+✅ Specialists hold the plant and article rights the diagram assigns them; administrators keep theirs
 ✅ Production-ready authentication and authorization
 ✅ AI-powered plant identification with confidence scoring
 ✅ Comprehensive knowledge verification workflow
 ✅ Preservation risk analysis with 5-factor scoring
 ✅ Beautiful, responsive UI with modern design
-✅ 21 passing backend tests
+✅ Peer-to-peer video consultations with no third-party room service
+✅ 154 passing backend tests plus endpoint-map, role-smoke, E2E and SSR render checks
 ✅ Complete API documentation
 ✅ Demo data with realistic examples
 ✅ Security best practices implemented

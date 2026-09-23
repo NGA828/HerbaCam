@@ -26,8 +26,9 @@ Django is the central controller. The AI never directly accesses the database. T
 
 ## Tech Stack
 
-- **Frontend**: React 19, Vite, Tailwind CSS v4, React Router, Axios, Recharts, Leaflet, Lucide React
+- **Frontend**: React 19, Vite, Tailwind CSS v4, React Router v7, Axios, Recharts, Leaflet, Lucide React
 - **Backend**: Python, Django 4.2 LTS, Django REST Framework, SimpleJWT, django-cors-headers
+- **Realtime**: browser WebRTC (peer-to-peer media) with Django relaying the handshake over the message thread
 - **Database**: MySQL 5.7+ / MariaDB 10.4+ (default for this project) / SQLite (fallback for local dev when no MySQL is configured)
 - **AI**: OpenRouter API with vision-capable models
 
@@ -48,6 +49,7 @@ venv\Scripts\activate.bat
 pip install -r requirements.txt
 python manage.py migrate
 python manage.py seed_data --clear   # Load demo data + copy plant images into backend/media/
+python manage.py check_identification   # optional: what the AI image path will actually do
 python manage.py runserver 0.0.0.0:8000
 ```
 
@@ -68,6 +70,21 @@ npm run dev
 ```
 
 Visit http://localhost:5173
+
+### Running it behind a proxy
+
+Some review/preview proxies forward the page but drop the `Authorization`
+header, which makes a logged-in session look logged out — the SPA falls back to
+the public pages and it reads like a stale deployment. The client therefore
+mirrors the bearer token into `X-Herbacam-Token`, and
+`backend/config/authentication.py` lifts it into place **only** when
+`Authorization` is absent. `Authorization` keeps priority, cookie-free semantics
+are unchanged (so no CSRF surface is added), and a stripped request is logged so
+the cause is visible in the server output:
+
+```
+Authorization header absent but X-Herbacam-Token present on GET /api/auth/profile/
+```
 
 ## Demo Accounts
 
@@ -97,7 +114,11 @@ accounts so notifications, reviews and audit history have realistic actors.
 | Knowledge submissions | 29 | Every workflow status, incl. rejected and in-revision |
 | AI identifications | 42 | COMPLETED / PROCESSING / FAILED |
 | Favorites | 45 | Spread across users |
-| Notifications | 80 | Submission, review and identification events |
+| Notifications | 80 | Submission, review, identification, booking and message events |
+| Availability windows | ~14 | Future-dated per expert, about half booked |
+| Appointments / thread messages | 7 / 20 | Every consultation status represented |
+| Feedback notes | 8 | Across 5 categories, some answered and resolved |
+| Assistant conversations | 12 | Demo transcripts (not live model output) |
 | Risk assessments | 42 | LOW / MODERATE / HIGH with component scores |
 | Audit log entries | 148+ | Logins, reviews, admin actions |
 | Regions / divisions / communities | 10 / 40 / 120 | The real Cameroonian administrative tree |
@@ -121,6 +142,18 @@ DB_PORT=3306
 # DATABASE_URL=mysql://root:your-mysql-password@127.0.0.1:3306/herbacam
 OPENROUTER_API_KEY=your-openrouter-key
 OPENROUTER_MODEL=google/gemini-3.8-flash
+# Only needed when the model above refuses image input: identification posts a
+# photo, and not every chat model accepts one. Check both ids without uploading:
+#   python backend/manage.py check_identification
+OPENROUTER_VISION_MODEL=
+# ICE servers handed to both sides when they join a video room. STUN only is fine
+# on one network; across carrier NAT you want a TURN relay, so this is a list in
+# settings, read from JSON in the environment, and never baked into the bundle.
+WEBRTC_ICE_SERVERS=[{"urls":"stun:stun.l.google.com:19908"}]
+# Extra "X-Herbacam-Token" credential used when a proxy strips Authorization.
+# Defaults to on under DEBUG and off otherwise. Leave it off in production: the
+# header is a bypass for a proxy defect, not an authentication scheme.
+AUTH_FALLBACK_HEADER=False
 ```
 
 ### Frontend (.env)
@@ -140,6 +173,11 @@ VITE_API_URL=/api
 
 ### For Registered Users
 - Upload plant images for AI identification
+- Choose a specialist by specialisation, by the verified badge, or by distance from
+  their own location, then book one of that specialist's open windows
+- Ask for a booked consultation to be moved to another of the same specialist's
+  windows; the window you leave goes back to the public list, and a move you asked
+  for needs the specialist's confirmation again
 - View identification history
 - Save favorite plants
 - Search by symptoms
@@ -155,13 +193,56 @@ VITE_API_URL=/api
 - Approve, reject, or request revisions
 - Manage evidence records
 - Manage safety information
+- Manage plant information — add a species, edit or publish one, withdraw it
+- Manage articles for the public reading room (drafts stay invisible to readers)
+- Keep their own directory listing current — specialisation, region, and whether they
+  are taking patients at all; a specialist who is not taking patients disappears from
+  the booking page along with their windows
+- Confirm, complete, decline or move a booking from the consultation desk
 
 ### For Administrators
 - Manage users and roles
-- Manage plants, symptoms, and knowledge
+- Manage plants, symptoms, and knowledge — plant and article curation is shared
+  with experts, but the symptom vocabulary is administrator-only, because
+  renaming a symptom relabels every contribution that already matched on it
 - View analytics and preservation risk
 - Monitor audit logs
 - Manage articles and content
+- Oversee every consultation and its utilisation stats, including which specialists
+  carry the verified badge on the booking page (verifying is an administrator's call,
+  and the specialist is notified either way)
+- Triage user feedback and reply to it (the author is notified)
+
+### Consultations between patients and specialists
+- Specialists publish availability windows; overlapping or past windows are refused
+- Patients choose a specialist from a directory they can filter by specialisation,
+  by the verified badge, or by straight-line distance from their own location
+- Patients book an open window and state what they want to discuss
+- Specialists confirm, complete (with a closing note) or mark a no-show
+- Cancelling, completing or moving a booking returns the window to the pool automatically
+- A live booking can be moved to another of the same specialist's open windows. Asked for
+  by the patient it goes back to PENDING, because the new time still needs agreement; asked
+  for by the specialist it stays CONFIRMED. A booking never changes specialist by moving —
+  that is a cancellation plus a new request
+- Each appointment carries one messaging thread, visible only to its two participants
+- The thread doubles as the WebRTC signalling channel, so a video consultation
+  runs peer-to-peer with no third-party room service
+- ICE candidates that beat the remote description are queued and flushed once it
+  lands (the answerer starts gathering immediately, so they always do); a
+  handshake arriving out of order is what leaves a call stuck at "connecting"
+- Handshake payloads never appear in the chat pane, and leaving the room is
+  announced to the other participant instead of leaving them with a frozen image
+- Media needs a direct path. The ICE list the room is built from is the deployment
+  setting `WEBRTC_ICE_SERVERS`, handed to both peers by the join call — with STUN only,
+  peers on one network connect and a strict NAT falls back to chat, which the room says
+  rather than pretending. Adding a `turn:` entry to that setting is the whole fix
+- Administrators see all consultations and platform-wide booking stats
+
+### AI assistant
+- Multi-turn chat grounded in an extract Django assembles from verified records
+- Every answer links the plants it cited; dosage text is only ever copied from a
+  record, never generated
+- A failed provider call rolls the turn back instead of leaving a dangling question
 
 ## Knowledge Verification Workflow
 
@@ -196,15 +277,24 @@ The full, generated **API ↔ frontend map** lives in
 [`docs/API_ENDPOINT_MAP.md`](docs/API_ENDPOINT_MAP.md): every backend route,
 the axios binding that calls it, and the page that uses it.
 
-Two checks keep that map honest — both are plain-Python and run anywhere:
+Four plain-Python checks and one Node check keep that map honest. Three of them
+need a running server — start both dev servers first, since the Vite proxy is
+what puts `/api` in reach:
 
 ```bash
 python scripts/verify_endpoint_map.py --markdown docs/API_ENDPOINT_MAP.md
-# backend endpoints : 82 / frontend calls : 82 / matched 1:1 : 82
+# backend endpoints : 119 / frontend calls : 119 / matched 1:1 : 119
 # orphan endpoints  : 0   / unmatched calls : 0
 
 python scripts/smoke_endpoints.py          # logs in as every role and calls every route
+python scripts/e2e_consultations.py        # walks the whole booking → room → message flow
+python scripts/e2e_content_curation.py     # proves who may write plants and articles, and who may not
+cd frontend && npm run smoke:ssr           # renders every page under Vite SSR
 ```
+
+`npm run smoke:ssr` exists because a bundler will not catch a free identifier
+(`<Leaf>` with no import is not a module-resolution error), so the build passes
+and the page white-screens. The SSR harness actually executes the components.
 
 Highlights:
 
@@ -218,8 +308,8 @@ Highlights:
 | /api/plants/ | GET | List published plants |
 | /api/plants/search/ | GET | Filter by region, habitat, family, part, evidence |
 | /api/plants/:id/ | GET | Plant detail |
-| /api/plants/admin/ | GET/POST | Curator plant management |
-| /api/plants/admin/:id/ | GET/PATCH/DELETE | Curator plant management |
+| /api/plants/admin/ | GET/POST | Plant management — expert or admin |
+| /api/plants/admin/:id/ | GET/PATCH/DELETE | Plant management — expert or admin |
 | /api/symptoms/ · /api/symptoms/:id/ | GET | Symptom index and detail |
 | /api/symptoms/search/?q= | GET | Symptom search |
 | /api/symptoms/admin/ · /api/symptoms/admin/:id/ | GET/POST · GET/PATCH/DELETE | Curator symptom management |
@@ -237,7 +327,7 @@ Highlights:
 | /api/evidence/ · /api/evidence/create/ · /api/evidence/:id/update/ | GET · POST · PATCH | Evidence records |
 | /api/safety/ · /api/safety/create/ · /api/safety/:id/update/ | GET · POST · PATCH | Safety records |
 | /api/articles/ · /api/articles/:slug/ · /api/articles/categories/ | GET | Reading room |
-| /api/articles/admin/ · /api/articles/admin/:id/ | GET/POST · GET/PATCH/DELETE | Article management |
+| /api/articles/admin/ · /api/articles/admin/:id/ | GET/POST · GET/PATCH/DELETE | Article management — expert or admin |
 | /api/analytics/dashboard/ | GET | Role-aware platform statistics |
 | /api/analytics/favorites/ · /add/ · /remove/ · /check/:id/ | GET · POST · GET | Favorites |
 | /api/notifications/ · /unread-count/ · /:id/read/ · /mark-all-read/ | GET · POST | Notifications |
@@ -246,6 +336,29 @@ Highlights:
 | /api/geography/regions/:id/ | GET/PATCH/DELETE | Single region |
 | /api/practitioners/profile/ · /api/practitioners/list/ | GET/PATCH · GET | Practitioner profiles |
 | /api/audit/ | GET | Audit trail (admin) |
+| /api/consultations/availability/ | GET/POST | Specialist's own windows |
+| /api/consultations/availability/:id/ | GET/PATCH/DELETE | One window (owner or admin) |
+| /api/consultations/slots/ | GET | Open windows patients may book (suspended specialists excluded) |
+| /api/consultations/experts/ | GET | Specialist directory: `?specialization`, `?region`, `?lat&lng` |
+| /api/consultations/experts/me/ | GET/PATCH | The specialist's own listing (never their own badge) |
+| /api/consultations/experts/:id/ | GET/PATCH | Verify or suspend a listing (admin) |
+| /api/consultations/appointments/ | GET | Role-scoped appointments |
+| /api/consultations/appointments/book/ | POST | Book a window (row-locked) |
+| /api/consultations/appointments/:id/ | GET/PATCH | Detail / reason and notes |
+| /api/consultations/appointments/:id/status/ | POST | confirm · cancel · complete · no_show |
+| /api/consultations/appointments/:id/reschedule/ | POST | Move a live booking to another open window |
+| /api/consultations/appointments/:id/start/ | POST | Join the room: room id, thread id and ICE servers |
+| /api/consultations/conversations/ | GET | Threads the caller is part of |
+| /api/consultations/conversations/:id/messages/ | GET/POST | Read thread / post a line |
+| /api/consultations/conversations/:id/signal/ | GET/POST | WebRTC offer/answer/ICE relay |
+| /api/consultations/conversations/:id/read/ | POST | Mark the thread read |
+| /api/consultations/stats/ | GET | Consultation oversight (admin) |
+| /api/assistant/ | GET/POST | Chat sessions |
+| /api/assistant/ask/ | POST | One grounded turn (throttled 60/hour) |
+| /api/assistant/:id/ · /messages/ · /archive/ | GET/DELETE · GET · PATCH | Transcript control |
+| /api/feedback/send/ | POST | Any user sends feedback |
+| /api/feedback/ · /:id/ | GET · GET/PATCH | Triage queue and replies (admin) |
+| /api/geography/locate/?lat=&lng= | GET | Nearest region for browser coordinates |
 
 ## Interface conventions
 
