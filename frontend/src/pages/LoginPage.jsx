@@ -2,7 +2,15 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
-import { Leaf, Mail, Lock, AlertCircle, Loader2 } from 'lucide-react';
+import { Mail, Lock, AlertCircle, Loader2 } from 'lucide-react';
+import { LogoMark } from '../components/Logo';
+
+const demoAccounts = [
+  { username: 'admin', password: 'admin123!', label: 'Admin' },
+  { username: 'drnkeng', password: 'expert123!', label: 'Expert' },
+  { username: 'mbaforc', password: 'pract123!', label: 'Practitioner' },
+  { username: 'demo_user', password: 'user1234!', label: 'User' },
+];
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -12,12 +20,11 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleLogin = async (credentials) => {
     setError('');
     setLoading(true);
     try {
-      const user = await login(form);
+      const user = await login(credentials);
       toast.success(
         `Welcome back, ${user.first_name || user.username}`,
         'You are signed in to Ancestor.',
@@ -30,6 +37,11 @@ export default function LoginPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    handleLogin(form);
   };
 
   return (
@@ -79,12 +91,20 @@ export default function LoginPage() {
           </p>
 
           <div className="mt-6 p-4 bg-stone-50 rounded-xl">
-            <p className="text-xs text-stone-400 font-medium mb-2">Demo Accounts:</p>
+            <p className="text-xs text-stone-400 font-medium mb-2">Quick demo login:</p>
             <div className="grid grid-cols-2 gap-2 text-xs text-stone-500">
-              <span>admin / admin123!</span>
-              <span>drnkeng / expert123!</span>
-              <span>mbaforc / pract123!</span>
-              <span>demo_user / user1234!</span>
+              {demoAccounts.map((account) => (
+                <button
+                  key={account.username}
+                  type="button"
+                  disabled={loading}
+                  onClick={() => handleLogin({ username: account.username, password: account.password })}
+                  className="rounded-lg border border-stone-200 bg-white px-2 py-2 text-left transition hover:border-green-300 hover:bg-green-50 hover:text-green-800 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <span className="block font-semibold">{account.label}</span>
+                  <span className="block text-[11px] text-stone-400">{account.username}</span>
+                </button>
+              ))}
             </div>
           </div>
         </div>

@@ -3,6 +3,7 @@ import { Link, useLocation, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useNotifications } from '../contexts/NotificationContext';
 import { PageTransition } from '../components/ui/motion';
+import { LogoMark } from '../components/Logo';
 import {
   Home, Leaf, Search, Camera, Heart, Clock, BookOpen, User, Bell,
   Menu, X, LogOut, ChevronDown, FileText, BarChart3, Shield,

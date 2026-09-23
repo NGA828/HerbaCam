@@ -48,7 +48,7 @@ export default function RegisterPage() {
         <div className="bg-white rounded-2xl shadow-xl p-8 border border-stone-100">
           <div className="text-center mb-8">
             <div className="w-14 h-14 bg-green-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <Leaf className="w-7 h-7 text-green-600" />
+              <LogoMark className="w-10 h-10" />
             </div>
             <h1 className="text-2xl font-bold text-stone-800">Create Account</h1>
             <p className="text-stone-500 mt-1">Join Ancestor to explore plant knowledge</p>
