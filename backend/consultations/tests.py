@@ -308,6 +308,45 @@ class MessagingTests(APITestCase):
             f"/api/consultations/conversations/{self.conversation.pk}/signal/").data
         self.assertEqual(len(as_peer), 1)
 
+    def test_chat_thread_never_carries_signalling_payloads(self):
+        self.client.force_authenticate(user=self.patient)
+        self.client.post(
+            f"/api/consultations/conversations/{self.conversation.pk}/signal/",
+            {'kind': 'OFFER', 'payload': 'v=0-this-is-sdp'})
+        self.client.post(
+            f"/api/consultations/conversations/{self.conversation.pk}/messages/",
+            {'body': 'hello'})
+        res = self.client.get(
+            f"/api/consultations/conversations/{self.conversation.pk}/messages/")
+        bodies = [row['body'] for row in res.data['results']]
+        self.assertEqual(bodies, ['hello'])
+
+    def test_signals_are_delivered_oldest_first(self):
+        # The room queues ICE until the description lands, relying on order.
+        self.client.force_authenticate(user=self.patient)
+        for index in range(4):
+            self.client.post(
+                f"/api/consultations/conversations/{self.conversation.pk}/signal/",
+                {'kind': 'ICE', 'payload': f'{{"candidate": "{index}"}}'})
+        self.client.force_authenticate(user=self.expert)
+        res = self.client.get(
+            f"/api/consultations/conversations/{self.conversation.pk}/signal/")
+        ids = [row['id'] for row in res.data]
+        self.assertEqual(ids, sorted(ids))
+
+    def test_the_other_participant_is_told_you_left(self):
+        self.client.force_authenticate(user=self.patient)
+        self.client.post(
+            f"/api/consultations/conversations/{self.conversation.pk}/signal/",
+            {'kind': 'LEAVE', 'payload': ''})
+        res = self.client.get(
+            f"/api/consultations/conversations/{self.conversation.pk}/signal/")
+        self.assertEqual([row['kind'] for row in res.data], [])
+        self.client.force_authenticate(user=self.expert)
+        res = self.client.get(
+            f"/api/consultations/conversations/{self.conversation.pk}/signal/")
+        self.assertEqual([row['kind'] for row in res.data], ['LEAVE'])
+
     def test_non_participant_cannot_read_the_thread(self):
         stranger = User.objects.create_user(username='nosy', password='test1234!')
         self.client.force_authenticate(user=stranger)

@@ -34,6 +34,10 @@ api.interceptors.request.use((config) => {
   const token = localStorage.getItem('access_token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
+    // Some preview/review proxies drop Authorization on the way through, which
+    // makes a logged-in session look logged out. The same token is mirrored
+    // here; see backend/config/authentication.py for the server-side half.
+    config.headers['X-Herbacam-Token'] = token;
   }
   return config;
 });
@@ -53,6 +57,7 @@ api.interceptors.response.use(
           const res = await authAPI.refreshToken(refreshToken);
           localStorage.setItem('access_token', res.data.access);
           originalRequest.headers.Authorization = `Bearer ${res.data.access}`;
+          originalRequest.headers['X-Herbacam-Token'] = res.data.access;
           return api(originalRequest);
         } catch {
           localStorage.removeItem('access_token');

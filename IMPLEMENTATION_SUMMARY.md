@@ -296,12 +296,12 @@ All pages are fully responsive:
 
 ## 🧪 Testing
 
-**111 backend tests**, all passing:
+**119 backend tests**, all passing:
 
 | Suite | Covers |
 | --- | --- |
-| `accounts` (21) | Users, roles, auth, register/login/profile, knowledge workflow, permissions, preservation risk |
-| `consultations` (34) | Availability overlap rules, booking, double-booking, role-scoped visibility, status transitions, window release on cancel/complete, messaging, signalling, video-room gating, admin stats |
+| `accounts` (26) | Users, roles, auth, register/login/profile, knowledge workflow, permissions, preservation risk, the proxy header fallback |
+| `consultations` (37) | Availability overlap rules, booking, double-booking, role-scoped visibility, status transitions, window release on cancel/complete, messaging, signalling order, thread excludes SDP, leave delivery, video-room gating, admin stats |
 | `assistant` (17) | Grounding, citation ids, unpublished plants excluded, prompt assembly, provider failure paths, transcript scoping |
 | `feedback` (8) | Submission, queue restriction, self-resolution refusal, notify-once reply, rating bounds |
 | `geography` (6) | Nearest-region resolution, out-of-country handling, malformed coordinates |
@@ -313,7 +313,7 @@ Beyond `manage.py test`:
 
 - `scripts/verify_endpoint_map.py` — 113 backend routes ↔ 113 axios calls, no orphans
 - `scripts/smoke_endpoints.py` — every route called as every role against a live server
-- `scripts/e2e_consultations.py` — 27-step booking → confirm → join → signal → message → complete flow
+- `scripts/e2e_consultations.py` — 30-step booking → confirm → join → signal → message → complete flow, including signal ordering, thread purity and leave propagation
 - `scripts/e2e_content_curation.py` — live proof of the plant/article curation grant (expert yes,
   practitioner/patient no, drafts invisible, symptom vocabulary admin-only); cleans up after itself
 - `frontend/scripts/ssr-smoke.mjs` (`npm run smoke:ssr`) — renders every page
@@ -535,12 +535,12 @@ Potential additions:
 
 ## 📊 Project Statistics
 
-- **Lines of Code**: ~21,050 (9,995 backend / 11,053 frontend)
+- **Lines of Code**: ~21,230 (10,127 backend / 11,107 frontend)
 - **Backend Apps**: 17
 - **Database Models**: 31
 - **API Endpoints**: 113 (each matched 1:1 to an axios binding)
 - **Frontend Pages**: 26 modules, 33 page components (all SSR-verified)
-- **Tests**: 111 backend tests, all passing
+- **Tests**: 119 backend tests, all passing
 - **Seed Data**: 32 plants, 32 symptoms, 109 traditional uses
 
 ## 🏆 Key Achievements
@@ -553,7 +553,7 @@ Potential additions:
 ✅ Preservation risk analysis with 5-factor scoring
 ✅ Beautiful, responsive UI with modern design
 ✅ Peer-to-peer video consultations with no third-party room service
-✅ 111 passing backend tests plus endpoint-map, role-smoke, E2E and SSR render checks
+✅ 119 passing backend tests plus endpoint-map, role-smoke, E2E and SSR render checks
 ✅ Complete API documentation
 ✅ Demo data with realistic examples
 ✅ Security best practices implemented

@@ -70,6 +70,21 @@ npm run dev
 
 Visit http://localhost:5173
 
+### Running it behind a proxy
+
+Some review/preview proxies forward the page but drop the `Authorization`
+header, which makes a logged-in session look logged out — the SPA falls back to
+the public pages and it reads like a stale deployment. The client therefore
+mirrors the bearer token into `X-Herbacam-Token`, and
+`backend/config/authentication.py` lifts it into place **only** when
+`Authorization` is absent. `Authorization` keeps priority, cookie-free semantics
+are unchanged (so no CSRF surface is added), and a stripped request is logged so
+the cause is visible in the server output:
+
+```
+Authorization header absent but X-Herbacam-Token present on GET /api/auth/profile/
+```
+
 ## Demo Accounts
 
 All demo accounts share the password pattern below; every role has several
@@ -182,6 +197,14 @@ VITE_API_URL=/api
 - Each appointment carries one messaging thread, visible only to its two participants
 - The thread doubles as the WebRTC signalling channel, so a video consultation
   runs peer-to-peer with no third-party room service
+- ICE candidates that beat the remote description are queued and flushed once it
+  lands (the answerer starts gathering immediately, so they always do); a
+  handshake arriving out of order is what leaves a call stuck at "connecting"
+- Handshake payloads never appear in the chat pane, and leaving the room is
+  announced to the other participant instead of leaving them with a frozen image
+- Media needs a direct path. With no TURN server configured, peers on one
+  network connect and a strict NAT falls back to chat — the room says so rather
+  than pretending
 - Administrators see all consultations and platform-wide booking stats
 
 ### AI assistant

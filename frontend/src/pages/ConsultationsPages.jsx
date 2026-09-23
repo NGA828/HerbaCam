@@ -611,6 +611,8 @@ export function ConsultationRoomPage({ basePath = '/user' }) {
   const localStreamRef = useRef(null);
   const lastSignalRef = useRef(0);
   const lastChatRef = useRef(0);
+  const pendingIceRef = useRef([]);
+  const seenChatRef = useRef(new Set());
   const isPatient = user?.id === appointment?.patient?.id;
 
   const teardown = useCallback(() => {
@@ -618,6 +620,8 @@ export function ConsultationRoomPage({ basePath = '/user' }) {
     peerRef.current = null;
     localStreamRef.current?.getTracks().forEach((t) => t.stop());
     localStreamRef.current = null;
+    pendingIceRef.current = [];
+    setMediaError('');
     setCallState('idle');
   }, []);
 
@@ -647,8 +651,9 @@ export function ConsultationRoomPage({ basePath = '/user' }) {
       try {
         const messages = await consultationsAPI.messages(conversationId,
           lastChatRef.current ? { after: lastChatRef.current } : undefined);
-        const rows = extractRows(messages);
+        const rows = extractRows(messages).filter((m) => !seenChatRef.current.has(m.id));
         if (rows.length && !cancelled) {
+          rows.forEach((m) => seenChatRef.current.add(m.id));
           lastChatRef.current = Math.max(lastChatRef.current, ...rows.map((m) => m.id));
           setChat((prev) => [...prev, ...rows]);
           consultationsAPI.markThreadRead(conversationId).catch(() => {});
@@ -669,22 +674,52 @@ export function ConsultationRoomPage({ basePath = '/user' }) {
       }
     };
 
+    /** Candidates that arrived before the remote description are added now. */
+    async function flushPendingIce(peer) {
+      const queued = pendingIceRef.current;
+      pendingIceRef.current = [];
+      for (const candidate of queued) {
+        try { await peer.addIceCandidate(candidate); } catch { /* gathered already */ }
+      }
+    }
+
     async function handleSignal(signal) {
       const peer = peerRef.current;
       if (!peer) return;
+      if (signal.kind === 'LEAVE') {
+        // Not SDP, so it is handled before anything is parsed. This is the
+        // same shutdown `leave()` performs, from the other side's point of
+        // view: without it the call keeps a frozen image and a green badge.
+        try { peer.close(); } catch { /* already closed */ }
+        peerRef.current = null;
+        localStreamRef.current?.getTracks().forEach((t) => t.stop());
+        localStreamRef.current = null;
+        pendingIceRef.current = [];
+        setCallState('ended');
+        setMediaError('Your counterpart left the room.');
+        return;
+      }
       const data = safeParse(signal.body);
       if (!data) return;
       try {
         if (signal.kind === 'OFFER') {
           await peer.setRemoteDescription(data);
+          await flushPendingIce(peer);
           const answer = await peer.createAnswer();
           await peer.setLocalDescription(answer);
           await consultationsAPI.sendSignal(conversationId, { kind: 'ANSWER', payload: JSON.stringify(answer) });
           setCallState('connecting');
         } else if (signal.kind === 'ANSWER') {
           await peer.setRemoteDescription(data);
+          await flushPendingIce(peer);
         } else if (signal.kind === 'ICE' && data.candidate) {
-          await peer.addIceCandidate(data);
+          // The answerer starts gathering candidates the moment its peer exists,
+          // so the offerer regularly receives ICE before it has a remote
+          // description — and the browser throws on exactly that. Dropping the
+          // candidate is not survivable: a host candidate is never re-offered,
+          // so the call would sit at "connecting" with no path to pair.
+          if (peer.remoteDescription) await peer.addIceCandidate(data);
+          else pendingIceRef.current.push(data);
         }
       } catch {
         setMediaError('The video link could not be negotiated. Chat still works.');
@@ -729,8 +764,15 @@ export function ConsultationRoomPage({ basePath = '/user' }) {
       peer.ontrack = (event) => {
         if (remoteVideo.current) remoteVideo.current.srcObject = event.streams[0];
         setCallState('connected');
+        setMediaError('');
       };
-      peer.onconnectionstatechange = () => setCallState(peer.connectionState);
+      peer.onconnectionstatechange = () => {
+        setCallState(peer.connectionState);
+        if (peer.connectionState === 'connected') setMediaError('');
+        if (peer.connectionState === 'failed') {
+          setMediaError('The peer connection failed — usually a network that blocks direct media. Chat still works.');
+        }
+      };
 
       // The patient offers; the specialist answers. Choosing one initiator
       // avoids the both-sides-offer collision that a naive handshake hits.
@@ -759,11 +801,18 @@ export function ConsultationRoomPage({ basePath = '/user' }) {
     if (!body || !conversationId) return;
     setDraft('');
     try {
-      await consultationsAPI.sendMessage(conversationId, { body });
-      setChat((prev) => [...prev, {
-        id: (prev.at(-1)?.id || 0) + 0.5, kind: 'TEXT', body,
-        sender: user?.id, sender_name: user?.username, created_at: new Date().toISOString(),
-      }]);
+      const res = await consultationsAPI.sendMessage(conversationId, { body });
+      // The endpoint returns the stored row, so the bubble shown right away is
+      // the same row the next poll would fetch — tracked by id so it appears once.
+      const row = {
+        kind: 'TEXT', body, sender: user?.id, sender_name: user?.username,
+        created_at: new Date().toISOString(), ...(res.data || {}),
+      };
+      if (Number.isFinite(row.id)) {
+        seenChatRef.current.add(row.id);
+        lastChatRef.current = Math.max(lastChatRef.current, row.id);
+      }
+      setChat((prev) => [...prev, row]);
     } catch (err) {
       toast.error('Message not sent', describeError(err));
     }

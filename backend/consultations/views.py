@@ -348,7 +348,11 @@ class ConversationMessages(generics.ListCreateAPIView):
         return conversation
 
     def get_queryset(self):
-        qs = self._conversation().messages.select_related('sender')
+        # Handshake payloads live in the same table but belong to the signalling
+        # endpoint; returning them here would drop raw SDP between two humans.
+        qs = self._conversation().messages.select_related('sender').exclude(
+            kind__in=[Message.Kind.OFFER, Message.Kind.ANSWER, Message.Kind.ICE],
+        )
         after = self.request.query_params.get('after')
         if after:
             qs = qs.filter(pk__gt=after)
@@ -394,8 +398,10 @@ class ConversationSignal(APIView):
     def get(self, request, pk):
         conversation = self._conversation(request, pk)
         after = request.query_params.get('after')
+        # LEAVE travels with the handshake so the other participant can end the
+        # call instead of staring at a frozen image.
         qs = conversation.messages.filter(kind__in=[
-            Message.Kind.OFFER, Message.Kind.ANSWER, Message.Kind.ICE,
+            Message.Kind.OFFER, Message.Kind.ANSWER, Message.Kind.ICE, Message.Kind.LEAVE,
         ]).exclude(sender=request.user)
         if after:
             qs = qs.filter(pk__gt=after)

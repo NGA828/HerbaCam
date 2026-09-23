@@ -138,6 +138,21 @@ status, res = call('POST', f'/api/consultations/conversations/{conversation_id}/
                    {'kind': 'TEXT', 'payload': 'forged chat'})
 ok &= check('signalling endpoint refuses TEXT', status == 400, f'{status} {res}')
 
+# 11b. the thread stays human, signals stay ordered, and leaving is announced
+status, thread_check = call('GET', f'/api/consultations/conversations/{conversation_id}/messages/', expert)
+leaked = [m['body'] for m in thread_check.get('results', []) if 'v=0-fake' in str(m['body'])]
+ok &= check('chat thread carries no SDP payloads', not leaked, leaked)
+status, sigs = call('GET', f'/api/consultations/conversations/{conversation_id}/signal/', expert)
+sig_rows = sigs if isinstance(sigs, list) else sigs.get('results', [])
+ids = [row['id'] for row in sig_rows]
+ok &= check('signals arrive oldest-first', ids == sorted(ids) and bool(ids), ids)
+call('POST', f'/api/consultations/conversations/{conversation_id}/signal/', patient,
+     {'kind': 'LEAVE', 'payload': ''})
+status, sigs_after = call('GET', f'/api/consultations/conversations/{conversation_id}/signal/', expert)
+after_rows = sigs_after if isinstance(sigs_after, list) else sigs_after.get('results', [])
+ok &= check('the other participant is told you left',
+            'LEAVE' in [row['kind'] for row in after_rows], [row['kind'] for row in after_rows])
+
 # 12. view messages
 status, res = call('POST', f'/api/consultations/conversations/{conversation_id}/messages/', patient,
                    {'body': 'Camera is working on my side.'})

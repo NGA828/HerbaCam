@@ -165,7 +165,9 @@ CORS_ALLOW_ALL_ORIGINS = True
 # REST Framework
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        # Subclass of SimpleJWT's class: identical checks, plus it can read the
+        # token from X-Herbacam-Token when a proxy eats Authorization.
+        'config.authentication.HeaderResilientJWTAuthentication',
     ),
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticatedOrReadOnly',
