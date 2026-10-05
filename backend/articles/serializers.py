@@ -2,6 +2,13 @@ from rest_framework import serializers
 from .models import Article, ArticleCategory
 
 
+class BlankAsNullPrimaryKeyRelatedField(serializers.PrimaryKeyRelatedField):
+    def to_internal_value(self, data):
+        if data == '':
+            return None
+        return super().to_internal_value(data)
+
+
 class ArticleCategorySerializer(serializers.ModelSerializer):
     class Meta:
         model = ArticleCategory
@@ -43,7 +50,7 @@ class ArticleAdminSerializer(serializers.ModelSerializer):
     """Admin variant: exposes a writable category and useful display fields."""
     author_name = serializers.SerializerMethodField()
     category_name = serializers.CharField(source='category.name', read_only=True, default='')
-    category = serializers.PrimaryKeyRelatedField(
+    category = BlankAsNullPrimaryKeyRelatedField(
         queryset=ArticleCategory.objects.all(), required=False, allow_null=True)
 
     class Meta:

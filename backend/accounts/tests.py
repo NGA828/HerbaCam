@@ -52,6 +52,32 @@ class AuthAPITest(APITestCase):
         res = self.client.post('/api/auth/login/', {'username': 'testuser', 'password': 'wrong'})
         self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
 
+    def test_login_to_deactivated_account_shows_the_reason_after_password_is_verified(self):
+        reason = 'Account access suspended for repeated policy violations.'
+        self.user.is_active = False
+        self.user.deactivation_reason = reason
+        self.user.save()
+
+        res = self.client.post(
+            '/api/auth/login/',
+            {'username': 'testuser', 'password': 'test1234!'},
+        )
+        self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertIn(reason, res.data['detail'])
+
+    def test_invalid_password_does_not_disclose_deactivation_reason(self):
+        reason = 'Confidential admin review.'
+        self.user.is_active = False
+        self.user.deactivation_reason = reason
+        self.user.save()
+
+        res = self.client.post(
+            '/api/auth/login/',
+            {'username': 'testuser', 'password': 'wrong'},
+        )
+        self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertNotIn(reason, str(res.data))
+
     def test_profile_requires_auth(self):
         res = self.client.get('/api/auth/profile/')
         self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
@@ -188,6 +214,38 @@ class PermissionTest(APITestCase):
         res = self.client.get('/api/auth/users/')
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertGreater(len(res.data.get('results', res.data)), 0)
+
+    def test_deactivating_an_account_requires_a_reason(self):
+        self.client.force_authenticate(user=self.admin)
+        res = self.client.patch(f'/api/auth/users/{self.user.id}/', {'is_active': False})
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.is_active)
+
+    def test_admin_can_deactivate_with_reason_and_audit_it(self):
+        from audit.models import AuditLog
+
+        reason = 'Repeatedly posting abusive content.'
+        self.client.force_authenticate(user=self.admin)
+        res = self.client.patch(
+            f'/api/auth/users/{self.user.id}/',
+            {'is_active': False, 'deactivation_reason': reason},
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertFalse(res.data['is_active'])
+        self.assertEqual(res.data['deactivation_reason'], reason)
+        entry = AuditLog.objects.get(action='USER_DEACTIVATE', target_id=self.user.id)
+        self.assertIn(reason, entry.description)
+
+    def test_reactivation_keeps_the_previous_deactivation_reason(self):
+        self.user.is_active = False
+        self.user.deactivation_reason = 'Repeatedly posting abusive content.'
+        self.user.save()
+        self.client.force_authenticate(user=self.admin)
+        res = self.client.patch(f'/api/auth/users/{self.user.id}/', {'is_active': True})
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertTrue(res.data['is_active'])
+        self.assertEqual(res.data['deactivation_reason'], self.user.deactivation_reason)
 
 
 class PreservationRiskTest(TestCase):

@@ -15,6 +15,7 @@ class User(AbstractUser):
     bio = models.TextField(blank=True, default='')
     phone = models.CharField(max_length=20, blank=True, default='')
     avatar = models.ImageField(upload_to='avatars/', blank=True, null=True)
+    deactivation_reason = models.TextField(blank=True, default='')
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

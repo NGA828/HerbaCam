@@ -6,7 +6,7 @@ import { Leaf, Camera, Heart, ArrowRight, TrendingUp, BarChart3 } from 'lucide-r
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { useToast } from '../contexts/ToastContext';
 import { CountUp, Reveal } from '../components/ui/motion';
-import { plantImage } from '../utils/images';
+import { plantImage, withImageFallback } from '../utils/images';
 
 const COLORS = ['#16a34a', '#059669', '#0d9488', '#0891b2', '#2563eb', '#7c3aed'];
 
@@ -139,7 +139,7 @@ export default function UserDashboard() {
               {recentIds.map((id, index) => (
                 <div key={id.id} style={{ animationDelay: `${index * 60}ms` }} className="animate-rise flex items-center gap-3 rounded-lg p-3 transition-colors hover:bg-stone-50">
                   <div className="w-14 h-14 bg-stone-100 rounded-xl overflow-hidden shrink-0 shadow-sm border border-stone-200">
-                    <img src={plantImage(id.image)} alt="Identification" className="w-full h-full object-cover transition-transform hover:scale-110" />
+                    <img src={plantImage(id.image)} alt="Identification" className="w-full h-full object-cover transition-transform hover:scale-110" onError={withImageFallback(id.image)} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-sm text-stone-800 truncate">

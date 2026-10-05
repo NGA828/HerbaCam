@@ -16,7 +16,7 @@ import {
   ChevronRight,
   Navigation
 } from 'lucide-react';
-import { plantImage, PLANT_PLACEHOLDER } from '../utils/images';
+import { plantImage, PLANT_PLACEHOLDER, withImageFallback } from '../utils/images';
 
 const CAMEROON_CENTER = [7.3697, 12.3547];
 const CAMEROON_ZOOM = 6;
@@ -333,7 +333,7 @@ export default function MapPage() {
                           <Popup className="custom-leaflet-popup" maxWidth={280}>
                             <div className="p-1">
                               <div className="mb-2 h-28 w-full overflow-hidden rounded-xl bg-stone-100">
-                                <img src={pinImage} alt="" className="h-full w-full object-cover" />
+                                <img src={pinImage} alt="" className="h-full w-full object-cover" onError={withImageFallback(firstPlant)} />
                               </div>
                               <div className="flex items-center gap-2 mb-2">
                                 <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: color }} />
@@ -375,7 +375,7 @@ export default function MapPage() {
                         <Popup className="custom-leaflet-popup" maxWidth={260}>
                           <div className="p-1">
                             <div className="mb-2 h-28 w-full overflow-hidden rounded-xl bg-stone-100">
-                              <img src={m.image} alt={m.name} className="h-full w-full object-cover" />
+                              <img src={m.image} alt={m.name} className="h-full w-full object-cover" onError={withImageFallback(m)} />
                             </div>
                             <p className="font-bold text-stone-900 text-sm italic leading-snug">{m.name}</p>
                             <p className="text-xs text-stone-500 mt-0.5">
@@ -486,6 +486,7 @@ export default function MapPage() {
                               alt=""
                               className="h-full w-full object-cover"
                               loading="lazy"
+                              onError={withImageFallback(plant)}
                             />
                           </span>
                           <span className="flex-1 truncate font-medium italic group-hover:text-emerald-800 transition-colors">

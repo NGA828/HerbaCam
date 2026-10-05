@@ -5,7 +5,7 @@ import { useConfirm } from '../components/ui/ConfirmDialog';
 import { Reveal } from '../components/ui/motion';
 import { Camera, Trash2, Leaf, Flag, ExternalLink } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { plantImage } from '../utils/images';
+import { plantImage, withImageFallback } from '../utils/images';
 
 export default function HistoryPage() {
   const { toast } = useToast();
@@ -77,7 +77,7 @@ export default function HistoryPage() {
             <Reveal key={item.id} delay={Math.min(index * 50, 300)}>
             <div className="bg-white rounded-xl border border-stone-200 p-4 flex items-center gap-4 transition hover:-translate-y-0.5 hover:shadow-md">
               <div className="w-16 h-16 bg-stone-100 rounded-lg overflow-hidden shrink-0">
-                {item.image && <img src={plantImage(item.image)} alt="" className="w-full h-full object-cover transition-transform hover:scale-110" />}
+                {item.image && <img src={plantImage(item.image)} alt="" className="w-full h-full object-cover transition-transform hover:scale-110" onError={withImageFallback(item.image)} />}
               </div>
               <div className="flex-1 min-w-0">
                 <p className="font-medium text-stone-800">

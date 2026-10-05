@@ -368,11 +368,21 @@ class StartConsultation(APIView):
         if not appointment.started_at:
             appointment.started_at = timezone.now()
             appointment.save(update_fields=['started_at'])
-        conversation, _ = Conversation.objects.get_or_create(appointment=appointment)
-        Message.objects.create(
-            conversation=conversation, sender=request.user,
-            kind=Message.Kind.JOIN, body=f'{request.user.username} joined the room',
-        )
+        with transaction.atomic():
+            conversation, _ = Conversation.objects.select_for_update().get_or_create(
+                appointment=appointment,
+            )
+            if request.user.id == appointment.patient_id:
+                # The patient is the sole offerer. Starting a new patient visit
+                # begins a fresh handshake; old SDP/ICE rows can otherwise be
+                # replayed to the expert on the next poll.
+                conversation.messages.filter(kind__in=[
+                    Message.Kind.OFFER, Message.Kind.ANSWER, Message.Kind.ICE,
+                ]).delete()
+            Message.objects.create(
+                conversation=conversation, sender=request.user,
+                kind=Message.Kind.JOIN, body=f'{request.user.username} joined the room',
+            )
         _log(request, 'CONSULTATION_START', f'Started consultation #{appointment.id}',
              target_type='Appointment', target_id=appointment.id)
         # ICE servers travel with the join instead of being baked into the

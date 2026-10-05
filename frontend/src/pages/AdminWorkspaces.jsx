@@ -17,7 +17,7 @@ import {
   FormPanel, KpiCard, Skeleton, StatusBadge, TableCard, Td, Th, Card,
   btnPrimary, btnSecondary, formatDate, formatDateTime, inputCls, selectCls, useList,
 } from '../components/admin/ui';
-import { plantImage, withImageFallback } from '../utils/images';
+import { articleImage, plantImage, withImageFallback } from '../utils/images';
 
 // The plant and article workspaces are mounted under /admin/ for administrators
 // and under /expert/ for specialist curators, so the header eyebrow follows
@@ -68,10 +68,45 @@ function SaveState({ saving, message }) {
   return null;
 }
 
+const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+const MAX_IMAGE_SIZE = 10 * 1024 * 1024;
+
+function imageUploadPayload(form, imageField, imageFile, removeImage) {
+  const payload = { ...form };
+  delete payload[imageField];
+  delete payload.imageFile;
+  delete payload.removeImage;
+  delete payload.coverImageFile;
+  delete payload.removeCoverImage;
+  delete payload.id;
+  delete payload.created_at;
+  delete payload.updated_at;
+
+  if (!imageFile && !removeImage) return payload;
+
+  const multipart = new FormData();
+  Object.entries(payload).forEach(([key, value]) => {
+    if (key === 'category' && value === null) {
+      multipart.append(key, '');
+    } else if (value !== null && value !== undefined) {
+      multipart.append(key, typeof value === 'boolean' ? String(value) : value);
+    }
+  });
+  multipart.append(imageField, imageFile || '');
+  return multipart;
+}
+
+function isSupportedImage(file) {
+  return IMAGE_TYPES.includes(file.type) && file.size <= MAX_IMAGE_SIZE;
+}
+
 /* 1 · Plants ---------------------------------------------------------------- */
 
 const HABITATS = ['FOREST', 'SAVANNA', 'MOUNTAIN', 'WETLAND', 'COASTAL', 'URBAN'];
-const emptyPlant = { scientific_name: '', common_name: '', family: '', genus: '', description: '', habitat: '', image: '', is_published: true };
+const emptyPlant = {
+  scientific_name: '', common_name: '', family: '', genus: '', description: '',
+  habitat: '', image: '', imageFile: null, removeImage: false, is_published: true,
+};
 
 export function PlantsManagement() {
   const { data, loading, error, reload } = useList(() => plantsAPI.adminList({ page_size: 200 }));
@@ -98,8 +133,9 @@ export function PlantsManagement() {
     setFlash('');
     try {
       const isEdit = Boolean(form.id);
-      if (isEdit) await plantsAPI.adminUpdate(form.id, form);
-      else await plantsAPI.adminCreate(form);
+      const payload = imageUploadPayload(form, 'image', form.imageFile, form.removeImage);
+      if (isEdit) await plantsAPI.adminUpdate(form.id, payload);
+      else await plantsAPI.adminCreate(payload);
       const label = isEdit ? 'Plant updated' : 'Plant created';
       setForm(null);
       setFlash(`${label}.`);
@@ -118,9 +154,9 @@ export function PlantsManagement() {
     setFlash('');
     try {
       const res = await plantsAPI.adminDetail(p.id);
-      setForm({ ...res.data });
+      setForm({ ...res.data, imageFile: null, removeImage: false });
     } catch {
-      setForm({ ...p });
+      setForm({ ...p, imageFile: null, removeImage: false });
       toast.warning('Opened with list data', 'The full record could not be refreshed from the API.');
     }
   };
@@ -184,7 +220,7 @@ export function PlantsManagement() {
           </div>
 
           {form && (
-            <FormPanel title={form.id ? `Edit ${form.scientific_name}` : 'New plant'} subtitle="Scientific name is unique. Leave the image blank to use the matching botanical artwork." onDismiss={() => setForm(null)}>
+            <FormPanel title={form.id ? `Edit ${form.scientific_name}` : 'New plant'} subtitle="Upload a plant photo or leave it blank to use the matching botanical artwork." onDismiss={() => setForm(null)}>
               <form onSubmit={save} className="grid gap-5 md:grid-cols-2">
                 <Field label="Scientific name" required>
                   <input className={`${inputCls} font-medium`} required value={form.scientific_name || ''} onChange={(e) => set('scientific_name', e.target.value)} placeholder="e.g. Moringa oleifera" />
@@ -207,8 +243,38 @@ export function PlantsManagement() {
                 <Field label="Description" className="md:col-span-2">
                   <textarea className={`${inputCls} min-h-28 resize-y`} value={form.description || ''} onChange={(e) => set('description', e.target.value)} placeholder="Morphology, distribution, and traditional relevance…" />
                 </Field>
-                <Field label="Image URL" hint="Stored on the server, served through /media.">
-                  <input className={inputCls} value={form.image || ''} onChange={(e) => set('image', e.target.value)} placeholder="/media/plants/moringa.jpg" />
+                <Field label="Plant photo" hint="JPEG, PNG or WebP, up to 10 MB.">
+                  <input
+                    className={inputCls}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      if (!isSupportedImage(file)) {
+                        e.target.value = '';
+                        toast.error('Unsupported image', 'Choose a JPEG, PNG or WebP image no larger than 10 MB.');
+                        return;
+                      }
+                      setForm((current) => ({ ...current, imageFile: file, removeImage: false }));
+                    }}
+                  />
+                  {form.imageFile && <p className="mt-1 text-xs text-stone-500">Selected: {form.imageFile.name}</p>}
+                  {form.image && (
+                    <div className="mt-2 flex items-center gap-3">
+                      {!form.removeImage && <img src={plantImage(form)} onError={withImageFallback(form)} alt="" className="h-12 w-12 rounded-lg object-cover" />}
+                      <button
+                        type="button"
+                        className="text-xs font-medium text-red-600 hover:text-red-700"
+                        onClick={() => {
+                          if (form.imageFile) set('imageFile', null);
+                          else set('removeImage', !form.removeImage);
+                        }}
+                      >
+                        {form.imageFile ? 'Clear selected photo' : form.removeImage ? 'Undo image removal' : 'Remove current image'}
+                      </button>
+                    </div>
+                  )}
                 </Field>
                 <label className="flex cursor-pointer items-center gap-3 self-end rounded-xl border border-stone-200 bg-white px-4 py-3 text-sm font-medium text-stone-700 transition-colors hover:border-emerald-300 hover:bg-emerald-50/30">
                   <input type="checkbox" className="h-4 w-4 rounded border-stone-300 text-emerald-600 focus:ring-emerald-500" checked={!!form.is_published} onChange={(e) => set('is_published', e.target.checked)} />
@@ -379,7 +445,10 @@ export function KnowledgeManagement() {
 
 /* 3 · Articles --------------------------------------------------------------- */
 
-const emptyArticle = { title: '', summary: '', content: '', category: null, is_published: false };
+const emptyArticle = {
+  title: '', summary: '', content: '', category: null,
+  coverImageFile: null, removeCoverImage: false, is_published: false,
+};
 
 export function ArticlesManagement() {
   const { data, loading, error, reload } = useList(() => articlesAPI.adminList({ page_size: 200 }));
@@ -397,9 +466,20 @@ export function ArticlesManagement() {
     setFlash('');
     try {
       const res = await articlesAPI.adminDetail(a.id);
-      setForm({ ...res.data, category: res.data.category ?? null });
+      setForm({
+        ...res.data,
+        category: res.data.category ?? null,
+        coverImageFile: null,
+        removeCoverImage: false,
+      });
     } catch {
-      setForm({ ...a, category: a.category ?? null, slug: a.slug });
+      setForm({
+        ...a,
+        category: a.category ?? null,
+        slug: a.slug,
+        coverImageFile: null,
+        removeCoverImage: false,
+      });
       toast.warning('Opened with list data', 'The full article could not be refreshed from the API.');
     }
   };
@@ -410,7 +490,12 @@ export function ArticlesManagement() {
     setFlash('');
     try {
       const slug = (form.slug || form.title.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')).replace(/(^-|-$)/g, '');
-      const payload = { ...form, slug };
+      const payload = imageUploadPayload(
+        { ...form, slug },
+        'cover_image',
+        form.coverImageFile,
+        form.removeCoverImage,
+      );
       const isEdit = Boolean(form.id);
       if (isEdit) await articlesAPI.adminUpdate(form.id, payload);
       else await articlesAPI.adminCreate(payload);
@@ -419,7 +504,7 @@ export function ArticlesManagement() {
       setFlash(`${label}.`);
       toast.success(label, isEdit
         ? 'Your changes are live in the reading room.'
-        : (payload.is_published ? 'The article is published and visible to readers.' : 'Saved as a draft.'));
+        : (form.is_published ? 'The article is published and visible to readers.' : 'Saved as a draft.'));
       reload();
     } catch (err) {
       const message = describeError(err);
@@ -494,6 +579,39 @@ export function ArticlesManagement() {
                 </div>
                 <Field label="Content" required>
                   <textarea className={`${inputCls} min-h-48 resize-y font-mono text-sm leading-relaxed`} required value={form.content || ''} onChange={(e) => set('content', e.target.value)} placeholder="Write the article content here…" />
+                </Field>
+                <Field label="Cover photo" hint="JPEG, PNG or WebP, up to 10 MB.">
+                  <input
+                    className={inputCls}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      if (!isSupportedImage(file)) {
+                        e.target.value = '';
+                        toast.error('Unsupported image', 'Choose a JPEG, PNG or WebP image no larger than 10 MB.');
+                        return;
+                      }
+                      setForm((current) => ({ ...current, coverImageFile: file, removeCoverImage: false }));
+                    }}
+                  />
+                  {form.coverImageFile && <p className="mt-1 text-xs text-stone-500">Selected: {form.coverImageFile.name}</p>}
+                  {form.cover_image && (
+                    <div className="mt-2 flex items-center gap-3">
+                      {!form.removeCoverImage && <img src={articleImage(form)} onError={withImageFallback({ name: form.title })} alt="" className="h-12 w-16 rounded-lg object-cover" />}
+                      <button
+                        type="button"
+                        className="text-xs font-medium text-red-600 hover:text-red-700"
+                        onClick={() => {
+                          if (form.coverImageFile) set('coverImageFile', null);
+                          else set('removeCoverImage', !form.removeCoverImage);
+                        }}
+                      >
+                        {form.coverImageFile ? 'Clear selected photo' : form.removeCoverImage ? 'Undo image removal' : 'Remove current image'}
+                      </button>
+                    </div>
+                  )}
                 </Field>
                 <label className="flex cursor-pointer items-center gap-3 text-sm font-medium text-stone-700 transition-colors hover:text-emerald-700">
                   <input type="checkbox" className="h-4 w-4 rounded border-stone-300 text-emerald-600 focus:ring-emerald-500" checked={!!form.is_published} onChange={(e) => set('is_published', e.target.checked)} />

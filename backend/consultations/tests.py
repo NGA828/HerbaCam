@@ -611,6 +611,44 @@ class ConsultationTransportTests(APITestCase):
             res = self.client.post(f'/api/consultations/appointments/{appointment_id}/start/')
         self.assertEqual(res.data['ice_servers'], relay)
 
+    def test_patient_restart_clears_stale_handshake_but_expert_join_preserves_new_offer(self):
+        appointment = Appointment.objects.create(
+            patient=self.patient, expert=self.expert, slot=self.slot,
+            status=Appointment.Status.CONFIRMED,
+        )
+        conversation = Conversation.objects.create(appointment=appointment)
+        stale_offer = Message.objects.create(
+            conversation=conversation, sender=self.patient,
+            kind=Message.Kind.OFFER, body='stale offer',
+        )
+        stale_candidate = Message.objects.create(
+            conversation=conversation, sender=self.patient,
+            kind=Message.Kind.ICE, body='stale candidate',
+        )
+        chat_message = Message.objects.create(
+            conversation=conversation, sender=self.patient,
+            kind=Message.Kind.TEXT, body='Keep this chat.',
+        )
+
+        self.client.force_authenticate(user=self.patient)
+        patient_join = self.client.post(
+            f'/api/consultations/appointments/{appointment.pk}/start/',
+        )
+        self.assertEqual(patient_join.status_code, status.HTTP_200_OK)
+        self.assertFalse(Message.objects.filter(pk__in=[stale_offer.pk, stale_candidate.pk]).exists())
+        self.assertTrue(Message.objects.filter(pk=chat_message.pk).exists())
+
+        fresh_offer = Message.objects.create(
+            conversation=conversation, sender=self.patient,
+            kind=Message.Kind.OFFER, body='fresh offer',
+        )
+        self.client.force_authenticate(user=self.expert)
+        expert_join = self.client.post(
+            f'/api/consultations/appointments/{appointment.pk}/start/',
+        )
+        self.assertEqual(expert_join.status_code, status.HTTP_200_OK)
+        self.assertTrue(Message.objects.filter(pk=fresh_offer.pk).exists())
+
 
 class RescheduleTests(APITestase if False else APITestCase):
     """Item: "manage appointments" has to include moving one, not just cancelling."""

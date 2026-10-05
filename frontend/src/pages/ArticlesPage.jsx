@@ -4,7 +4,7 @@ import { articlesAPI } from '../api/client';
 import { useToast } from '../contexts/ToastContext';
 import { Reveal } from '../components/ui/motion';
 import { BookOpen, Calendar, ArrowRight, Loader2 } from 'lucide-react';
-import { articleImage } from '../utils/images';
+import { articleImage, withImageFallback } from '../utils/images';
 
 export default function ArticlesPage() {
   const { toast } = useToast();
@@ -80,7 +80,7 @@ export default function ArticlesPage() {
                         alt=""
                         className="w-full h-full object-cover"
                         loading="lazy"
-                        onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.style.display = 'none'; const sib = e.currentTarget.nextElementSibling; if (sib) sib.style.display = ''; }}
+                        onError={withImageFallback({ name: article.title })}
                       />
                     ) : null}
                     <BookOpen className={`w-12 h-12 text-green-300 ${article.cover_image ? 'hidden' : ''}`} />

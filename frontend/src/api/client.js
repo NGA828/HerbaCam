@@ -7,6 +7,12 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
+const dataConfig = (data) => (
+  data instanceof FormData
+    ? { headers: { 'Content-Type': 'multipart/form-data' } }
+    : undefined
+);
+
 /**
  * Lightweight pub/sub so the UI can surface failures that individual pages do
  * not handle themselves. Set `skipErrorToast: true` on a request config when a
@@ -85,7 +91,7 @@ export const authAPI = {
   register: (data) => api.post('/auth/register/', data),
   refreshToken: (refresh) => api.post('/auth/token/refresh/', { refresh }),
   getProfile: () => api.get('/auth/profile/'),
-  updateProfile: (data) => api.patch('/auth/profile/', data, data instanceof FormData ? { headers: { 'Content-Type': 'multipart/form-data' } } : undefined),
+  updateProfile: (data) => api.patch('/auth/profile/', data, dataConfig(data)),
   changePassword: (data) => api.post('/auth/change-password/', data),
   getSettings: () => api.get('/auth/settings/'),
   updateSettings: (data) => api.put('/auth/settings/', data),
@@ -97,8 +103,8 @@ export const plantsAPI = {
   detail: (id) => api.get(`/plants/${id}/`),
   search: (params) => api.get('/plants/search/', { params }),
   adminList: (params) => api.get('/plants/admin/', { params }),
-  adminCreate: (data) => api.post('/plants/admin/', data),
-  adminUpdate: (id, data) => api.patch(`/plants/admin/${id}/`, data),
+  adminCreate: (data) => api.post('/plants/admin/', data, dataConfig(data)),
+  adminUpdate: (id, data) => api.patch(`/plants/admin/${id}/`, data, dataConfig(data)),
   adminDetail: (id) => api.get(`/plants/admin/${id}/`),
   adminDelete: (id) => api.delete(`/plants/admin/${id}/`),
 };
@@ -117,9 +123,7 @@ export const symptomsAPI = {
 
 // Identification API
 export const identificationAPI = {
-  identify: (formData) => api.post('/identification/identify/', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  }),
+  identify: (formData) => api.post('/identification/identify/', formData, dataConfig(formData)),
   history: () => api.get('/identification/history/'),
   detail: (id) => api.get(`/identification/${id}/`),
   delete: (id) => api.delete(`/identification/${id}/delete/`),
@@ -174,9 +178,9 @@ export const articlesAPI = {
   detail: (slug) => api.get(`/articles/${slug}/`),
   categories: () => api.get('/articles/categories/'),
   adminList: (params) => api.get('/articles/admin/', { params }),
-  adminCreate: (data) => api.post('/articles/admin/', data),
+  adminCreate: (data) => api.post('/articles/admin/', data, dataConfig(data)),
   adminDetail: (id) => api.get(`/articles/admin/${id}/`),
-  adminUpdate: (id, data) => api.patch(`/articles/admin/${id}/`, data),
+  adminUpdate: (id, data) => api.patch(`/articles/admin/${id}/`, data, dataConfig(data)),
   adminDelete: (id) => api.delete(`/articles/admin/${id}/`),
 };
 

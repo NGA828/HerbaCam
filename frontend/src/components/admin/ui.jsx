@@ -2,6 +2,7 @@
    The kit intentionally co-exports non-component values. */
 import { useCallback, useEffect, useState } from 'react';
 import { CircleAlert, Inbox, RefreshCw } from 'lucide-react';
+import { normalizeMediaUrl } from '../../utils/images';
 
 /** Unwrap DRF paginated or plain-array responses. */
 export const extractRows = (r) => r?.data?.results || r?.data || [];
@@ -237,16 +238,32 @@ export function FormActions({ saving, onCancel, saveLabel = 'Save changes' }) {
   );
 }
 
-export function Avatar({ name, size = 'h-9 w-9 text-xs' }) {
+export function Avatar({ name, src, size = 'h-9 w-9 text-xs' }) {
   const initials = String(name || '?')
     .split(/\s+/)
     .slice(0, 2)
     .map((p) => p[0] || '')
     .join('')
     .toUpperCase();
+  const imageUrl = normalizeMediaUrl(src);
+  const [imageFailed, setImageFailed] = useState(false);
+
+  useEffect(() => {
+    setImageFailed(false);
+  }, [imageUrl]);
+
   return (
-    <span className={`inline-flex ${size} shrink-0 items-center justify-center rounded-full bg-emerald-100 font-bold text-emerald-800 ring-2 ring-emerald-200/60`}>
-      {initials || '?'}
+    <span className={`relative inline-flex ${size} shrink-0 items-center justify-center overflow-hidden rounded-full bg-emerald-100 font-bold text-emerald-800 ring-2 ring-emerald-200/60`}>
+      {imageUrl && !imageFailed ? (
+        <img
+          src={imageUrl}
+          alt=""
+          className="absolute inset-0 h-full w-full object-cover"
+          onError={() => setImageFailed(true)}
+        />
+      ) : (
+        initials || '?'
+      )}
     </span>
   );
 }

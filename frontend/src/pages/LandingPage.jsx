@@ -6,6 +6,7 @@ import {
   Eye, Globe, TrendingUp, CheckCircle
 } from 'lucide-react';
 import { plantsAPI, articlesAPI, analyticsAPI } from '../api/client';
+import { plantImage, withImageFallback } from '../utils/images';
 import heroImg from '../assets/hero-botanical.jpg';
 
 function AnimatedCounter({ end, duration = 2000, suffix = '' }) {
@@ -116,14 +117,12 @@ export default function LandingPage() {
                     {plants.slice(0, 4).map((plant) => (
                       <Link key={plant.id} to={`/plants/${plant.id}`} className="group bg-white/10 rounded-2xl p-3 hover:bg-white/20 transition-all">
                         <div className="aspect-square rounded-xl overflow-hidden mb-2">
-                          {plant.image ? (
-                            <img src={`${plant.image.replace(/^https?:\/\/[^/]+/, '')}`} alt={plant.common_name}
-                              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-                          ) : (
-                            <div className="w-full h-full bg-green-600/30 flex items-center justify-center">
-                              <Leaf className="w-8 h-8 text-green-300" />
-                            </div>
-                          )}
+                          <img
+                            src={plantImage(plant)}
+                            alt={plant.common_name || plant.scientific_name}
+                            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                            onError={withImageFallback(plant)}
+                          />
                         </div>
                         <p className="text-xs text-white/80 font-medium truncate">{plant.common_name}</p>
                         <p className="text-[10px] text-white/50 italic truncate">{plant.scientific_name}</p>
@@ -239,14 +238,12 @@ export default function LandingPage() {
                 <Link to={`/plants/${plant.id}`}
                   className="group bg-white rounded-2xl border border-stone-200 overflow-hidden hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
                   <div className="aspect-[4/3] bg-gradient-to-br from-green-50 to-emerald-50 overflow-hidden relative">
-                    {plant.image ? (
-                      <img src={`${plant.image.replace(/^https?:\/\/[^/]+/, '')}`} alt={plant.common_name}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <Leaf className="w-16 h-16 text-green-200 group-hover:text-green-300 transition-colors" />
-                      </div>
-                    )}
+                    <img
+                      src={plantImage(plant)}
+                      alt={plant.common_name || plant.scientific_name}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      onError={withImageFallback(plant)}
+                    />
                     <div className="absolute top-3 right-3 px-2 py-1 bg-white/90 backdrop-blur-sm rounded-lg text-xs font-medium text-green-700 shadow-sm">
                       {plant.family || 'Documented'}
                     </div>

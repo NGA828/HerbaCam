@@ -14,7 +14,7 @@ import {
   FlaskConical, 
   CheckCircle2 
 } from 'lucide-react';
-import { plantImage } from '../utils/images';
+import { plantImage, withImageFallback } from '../utils/images';
 import DosageInfo from '../components/DosageInfo';
 
 export default function SymptomsPage() {
@@ -216,6 +216,7 @@ export default function SymptomsPage() {
                                   alt={item.plant.common_name || item.plant.scientific_name} 
                                   className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" 
                                   loading="lazy"
+                                  onError={withImageFallback(item.plant)}
                                 />
                               ) : (
                                 <Leaf className="w-10 h-10 text-stone-300" />

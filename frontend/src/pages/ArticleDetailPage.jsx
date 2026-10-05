@@ -4,7 +4,7 @@ import { articlesAPI } from '../api/client';
 import { useToast } from '../contexts/ToastContext';
 import { Reveal } from '../components/ui/motion';
 import { ArrowLeft, Calendar, Clock, FileX } from 'lucide-react';
-import { articleImage } from '../utils/images';
+import { articleImage, withImageFallback } from '../utils/images';
 
 export default function ArticleDetailPage() {
   const { slug } = useParams();
@@ -149,10 +149,7 @@ export default function ArticleDetailPage() {
                   src={articleImage(article)} 
                   alt={article.title} 
                   className="w-full h-full object-cover" 
-                  onError={(e) => { 
-                    e.currentTarget.onerror = null;
-                    e.currentTarget.style.opacity = '0';
-                  }} 
+                  onError={withImageFallback({ name: article.title })}
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
               </div>

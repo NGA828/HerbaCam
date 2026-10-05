@@ -1,6 +1,27 @@
 from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
+from django.contrib.auth import get_user_model
+from rest_framework.exceptions import AuthenticationFailed
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from .models import User
+
+
+class UserLoginTokenSerializer(TokenObtainPairSerializer):
+    def validate(self, attrs):
+        username = attrs.get(self.username_field)
+        password = attrs.get('password')
+        if username and password:
+            try:
+                user = get_user_model()._default_manager.get_by_natural_key(username)
+            except get_user_model().DoesNotExist:
+                user = None
+            if user and not user.is_active and user.check_password(password):
+                reason = user.deactivation_reason.strip()
+                message = 'This account has been deactivated.'
+                if reason:
+                    message += f' Reason: {reason}'
+                raise AuthenticationFailed(message)
+        return super().validate(attrs)
 
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
@@ -45,8 +66,20 @@ class UserAdminSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['id', 'username', 'email', 'first_name', 'last_name', 'role',
-                  'bio', 'phone', 'is_active', 'date_joined', 'last_login']
+                  'bio', 'phone', 'avatar', 'is_active', 'deactivation_reason',
+                  'date_joined', 'last_login']
         read_only_fields = ['id', 'date_joined', 'last_login']
+
+    def validate(self, attrs):
+        instance = self.instance
+        if instance and instance.is_active and attrs.get('is_active') is False:
+            reason = attrs.get('deactivation_reason', '').strip()
+            if not reason:
+                raise serializers.ValidationError({
+                    'deactivation_reason': 'Provide a reason before deactivating this account.'
+                })
+            attrs['deactivation_reason'] = reason
+        return attrs
 
 
 class ChangePasswordSerializer(serializers.Serializer):

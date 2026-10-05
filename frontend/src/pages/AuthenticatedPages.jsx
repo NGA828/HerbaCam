@@ -626,6 +626,9 @@ export function AdminUsersPage() {
   const [openId, setOpenId] = useState(null);
   const [detail, setDetail] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [deactivationTarget, setDeactivationTarget] = useState(null);
+  const [deactivationReason, setDeactivationReason] = useState('');
+  const [deactivating, setDeactivating] = useState(false);
   const { toast } = useToast();
   const confirm = useConfirm();
 
@@ -656,9 +659,11 @@ export function AdminUsersPage() {
       setFlash('Saved.');
       toast.success('User updated', message);
       reload();
+      return true;
     } catch (err) {
       setFlash('Update failed.');
       toast.error('Could not update user', describeError(err));
+      return false;
     }
   };
 
@@ -675,16 +680,36 @@ export function AdminUsersPage() {
 
   const toggleActive = async (x) => {
     const next = !x.is_active;
+    if (next === false) {
+      setDeactivationTarget(x);
+      setDeactivationReason('');
+      return;
+    }
     const ok = await confirm({
-      title: next ? `Reactivate ${x.username}?` : `Deactivate ${x.username}?`,
-      message: next
-        ? 'This account will be able to sign in again.'
-        : 'This account will be signed out and will not be able to sign in.',
-      confirmLabel: next ? 'Reactivate' : 'Deactivate',
-      tone: next ? 'primary' : 'danger',
+      title: `Reactivate ${x.username}?`,
+      message: 'This account will be able to sign in again.',
+      confirmLabel: 'Reactivate',
+      tone: 'primary',
     });
     if (!ok) return;
     await update(x, { is_active: next }, `${x.username} was ${next ? 'reactivated' : 'deactivated'}.`);
+  };
+
+  const submitDeactivation = async (event) => {
+    event.preventDefault();
+    const reason = deactivationReason.trim();
+    if (!reason || !deactivationTarget) return;
+    setDeactivating(true);
+    const saved = await update(
+      deactivationTarget,
+      { is_active: false, deactivation_reason: reason },
+      `${deactivationTarget.username} was deactivated.`,
+    );
+    setDeactivating(false);
+    if (saved) {
+      setDeactivationTarget(null);
+      setDeactivationReason('');
+    }
   };
 
   const counts = (data || []).reduce((acc, x) => {
@@ -697,7 +722,7 @@ export function AdminUsersPage() {
       <AdminHeader
         eyebrow="Administration"
         title="Users & access"
-        description="Role assignments and account status are enforced by the API, not merely hidden in this interface."
+        description="Role assignments and account status are enforced by the API. Account deactivation requires a recorded reason."
         icon={UserRound}
       />
 
@@ -743,7 +768,7 @@ export function AdminUsersPage() {
                   <tr key={x.id} className="transition-colors hover:bg-emerald-50/40">
                     <Td>
                       <button type="button" onClick={() => toggleUser(x)} className="flex w-full items-center gap-3 text-left">
-                        <Avatar name={`${x.first_name || ''} ${x.username}`.trim()} />
+                        <Avatar name={`${x.first_name || ''} ${x.username}`.trim()} src={x.avatar} />
                         <div className="min-w-0">
                           <p className="truncate font-semibold text-stone-800">{x.first_name ? `${x.first_name} ${x.last_name || ''}`.trim() : x.username}</p>
                           <p className="truncate text-xs text-stone-500">{x.email}</p>
@@ -780,6 +805,12 @@ export function AdminUsersPage() {
                                   <dd className="text-stone-600">{detail.bio}</dd>
                                 </div>
                               )}
+                              {!detail?.is_active && detail?.deactivation_reason && (
+                                <div className="col-span-2">
+                                  <dt className="text-xs font-semibold uppercase tracking-wide text-stone-400">Deactivation reason</dt>
+                                  <dd className="whitespace-pre-wrap text-stone-600">{detail.deactivation_reason}</dd>
+                                </div>
+                              )}
                             </dl>
                           )}
                         </div>
@@ -808,6 +839,55 @@ export function AdminUsersPage() {
             </TableCard>
           )}
         </>
+      )}
+      {deactivationTarget && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-stone-900/50 p-4">
+          <form
+            onSubmit={submitDeactivation}
+            className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="deactivation-title"
+          >
+            <h2 id="deactivation-title" className="text-lg font-bold text-stone-900">
+              Deactivate {deactivationTarget.username}?
+            </h2>
+            <p className="mt-2 text-sm leading-relaxed text-stone-600">
+              This account will be signed out and blocked from signing in. Record the reason for this action.
+            </p>
+            <label htmlFor="deactivation-reason" className="mt-5 block text-sm font-semibold text-stone-700">
+              Reason <span className="text-red-600">*</span>
+            </label>
+            <textarea
+              id="deactivation-reason"
+              autoFocus
+              required
+              maxLength={10000}
+              rows={4}
+              value={deactivationReason}
+              onChange={(event) => setDeactivationReason(event.target.value)}
+              className={`${inputCls} mt-2 resize-y`}
+              placeholder="Explain why this account is being deactivated…"
+            />
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={deactivating}
+                onClick={() => setDeactivationTarget(null)}
+                className={btnSecondary}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={deactivating || !deactivationReason.trim()}
+                className="rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {deactivating ? 'Deactivating…' : 'Deactivate account'}
+              </button>
+            </div>
+          </form>
+        </div>
       )}
     </div>
   );

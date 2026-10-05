@@ -2,8 +2,12 @@ import { useMemo, useState } from 'react';
 import { Link, useLocation, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useNotifications } from '../contexts/NotificationContext';
+import { useToast } from '../contexts/ToastContext';
+import { useConfirm } from '../components/ui/ConfirmDialog';
+import { Avatar } from '../components/admin/ui';
 import { PageTransition } from '../components/ui/motion';
 import { LogoMark } from '../components/Logo';
+import { normalizeMediaUrl } from '../utils/images';
 import {
   Home, Leaf, Search, Camera, Heart, Clock, BookOpen, User, Bell,
   Menu, X, LogOut, ChevronDown, FileText, BarChart3, Shield,
@@ -111,6 +115,8 @@ function NotificationDropdown({ onClose }) {
 export default function DashboardLayout() {
   const { user, logout } = useAuth();
   const { unreadCount } = useNotifications();
+  const { toast } = useToast();
+  const confirm = useConfirm();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
@@ -119,6 +125,7 @@ export default function DashboardLayout() {
 
   const role = user?.role || 'USER';
   const items = navItems[role] || navItems.USER;
+  const profileBackground = normalizeMediaUrl(user?.avatar);
 
   const pageTitle = useMemo(() => {
     const all = [...navItems.USER, ...navItems.PRACTITIONER, ...navItems.EXPERT, ...navItems.ADMIN];
@@ -130,13 +137,32 @@ export default function DashboardLayout() {
     return 'Dashboard';
   }, [location.pathname]);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    const confirmed = await confirm({
+      title: 'Log out of Ancestor?',
+      message: 'You will need to sign in again to access your account.',
+      confirmLabel: 'Log out',
+      tone: 'danger',
+    });
+    if (!confirmed) return;
     logout();
+    toast.success('Signed out', 'You have been logged out of Ancestor.');
     navigate('/');
   };
 
   return (
-    <div className="flex h-screen overflow-hidden bg-stone-50">
+    <div className="relative flex h-screen overflow-hidden bg-stone-50">
+      {profileBackground && (
+        <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden" aria-hidden="true">
+          <img
+            src={profileBackground}
+            alt=""
+            className="h-full w-full scale-105 object-cover opacity-20 blur-md"
+          />
+          <div className="absolute inset-0 bg-stone-50/75" />
+        </div>
+      )}
+
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[1px] animate-fade-in lg:hidden" onClick={() => setSidebarOpen(false)} />
@@ -182,7 +208,7 @@ export default function DashboardLayout() {
       </aside>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="relative z-10 flex-1 flex flex-col overflow-hidden">
         {/* Header */}
         <header className="h-16 bg-white border-b border-stone-200 flex items-center justify-between px-4 lg:px-6 shrink-0">
           <div className="flex items-center gap-3">
@@ -217,11 +243,11 @@ export default function DashboardLayout() {
                 className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-stone-100 transition-colors"
                 onClick={() => setProfileOpen(!profileOpen)}
               >
-                <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center ring-2 ring-green-200">
-                  <span className="text-xs font-bold text-green-700">
-                    {(user?.first_name?.[0] || user?.username?.[0] || 'U').toUpperCase()}
-                  </span>
-                </div>
+                <Avatar
+                  name={`${user?.first_name || ''} ${user?.last_name || user?.username || ''}`.trim()}
+                  src={user?.avatar}
+                  size="h-8 w-8 text-xs"
+                />
                 <span className="hidden sm:block text-sm font-medium text-stone-700">
                   {user?.first_name || user?.username}
                 </span>

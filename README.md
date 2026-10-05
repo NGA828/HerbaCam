@@ -229,6 +229,9 @@ VITE_API_URL=/api
 - Each appointment carries one messaging thread, visible only to its two participants
 - The thread doubles as the WebRTC signalling channel, so a video consultation
   runs peer-to-peer with no third-party room service
+- Patients can start either a voice-only call (microphone, no camera requested)
+  or a video call; the specialist automatically matches the mode in the incoming
+  call offer
 - ICE candidates that beat the remote description are queued and flushed once it
   lands (the answerer starts gathering immediately, so they always do); a
   handshake arriving out of order is what leaves a call stuck at "connecting"
@@ -241,6 +244,10 @@ VITE_API_URL=/api
 - Browsers only expose camera and microphone to a secure context (`https://` or
   `localhost`) after the user grants permission. When testing from another device,
   use HTTPS and allow camera/microphone access for the frontend origin
+- For same-computer tests, sign in as the patient and specialist in separate
+  browser profiles (or one regular window and one private window); use headphones
+  to avoid microphone feedback. If another local app or tab holds a camera or
+  microphone, the room will continue with whichever media device is available
 - Administrators see all consultations and platform-wide booking stats
 
 ### AI assistant

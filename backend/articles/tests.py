@@ -4,12 +4,18 @@ The ANCESTOR use-case diagram hands ``manage articles`` to the specialized
 expert. Drafts must stay invisible to readers no matter who is allowed to write
 them, so the read path is asserted here too.
 """
+from io import BytesIO
+from tempfile import TemporaryDirectory
+
+from PIL import Image
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import override_settings
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from accounts.models import User
-from articles.models import Article
+from articles.models import Article, ArticleCategory
 
 ENDPOINT = '/api/articles/admin/'
 
@@ -19,6 +25,12 @@ def rows(payload):
     if isinstance(payload, dict):
         return payload.get('results', [])
     return payload
+
+
+def tiny_png():
+    image = BytesIO()
+    Image.new('RGB', (1, 1), color='green').save(image, format='PNG')
+    return SimpleUploadedFile('cover.png', image.getvalue(), content_type='image/png')
 
 
 class ArticleCurationPermissionTests(APITestCase):
@@ -45,6 +57,32 @@ class ArticleCurationPermissionTests(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_201_CREATED)
         created = Article.objects.get(slug='neem-in-the-home-garden')
         self.assertEqual(created.author, self.expert)
+
+    def test_expert_can_upload_a_cover_and_clear_category_in_the_same_request(self):
+        self.client.force_authenticate(user=self.expert)
+        category = ArticleCategory.objects.create(name='Botany', slug='botany')
+        self.draft.category = category
+        self.draft.save()
+
+        with TemporaryDirectory() as media_root, override_settings(MEDIA_ROOT=media_root):
+            response = self.client.patch(
+                f'{ENDPOINT}{self.draft.pk}/',
+                {'cover_image': tiny_png(), 'category': ''},
+                format='multipart',
+            )
+            self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+            self.draft.refresh_from_db()
+            self.assertTrue(self.draft.cover_image.name.startswith('articles/'))
+            self.assertIsNone(self.draft.category)
+
+            cleared = self.client.patch(
+                f'{ENDPOINT}{self.draft.pk}/',
+                {'cover_image': ''},
+                format='multipart',
+            )
+            self.assertEqual(cleared.status_code, status.HTTP_200_OK, cleared.data)
+            self.draft.refresh_from_db()
+            self.assertFalse(self.draft.cover_image)
 
     def test_expert_can_publish_a_draft_and_the_timestamp_follows(self):
         self.client.force_authenticate(user=self.expert)

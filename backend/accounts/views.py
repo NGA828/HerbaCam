@@ -2,10 +2,11 @@ from rest_framework import generics, status, permissions
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.views import TokenObtainPairView
 from .models import User, SystemSetting
 from .serializers import (
     UserRegistrationSerializer, UserProfileSerializer,
-    UserAdminSerializer, ChangePasswordSerializer
+    UserAdminSerializer, ChangePasswordSerializer, UserLoginTokenSerializer
 )
 from audit.services import log_action
 from .permissions import IsAdministrator
@@ -29,6 +30,10 @@ class RegisterView(generics.CreateAPIView):
                 'access': str(refresh.access_token),
             }
         }, status=status.HTTP_201_CREATED)
+
+
+class UserLoginView(TokenObtainPairView):
+    serializer_class = UserLoginTokenSerializer
 
 
 class ProfileView(generics.RetrieveUpdateAPIView):
@@ -105,7 +110,16 @@ class UserManageView(generics.RetrieveUpdateAPIView):
         return User.objects.all()
 
     def perform_update(self, serializer):
-        log_action(self.request.user, 'USER_MANAGE',
-                   f'Admin modified user: {serializer.instance.username}',
-                   target_type='User')
-        serializer.save()
+        was_active = serializer.instance.is_active
+        user = serializer.save()
+        if was_active and not user.is_active:
+            action = 'USER_DEACTIVATE'
+            description = (
+                f'Admin deactivated user: {user.username}. '
+                f'Reason: {user.deactivation_reason}'
+            )
+        else:
+            action = 'USER_MANAGE'
+            description = f'Admin modified user: {user.username}'
+        log_action(self.request.user, action, description,
+                   target_type='User', target_id=user.id)

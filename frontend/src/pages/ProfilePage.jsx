@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { authAPI, geographyAPI, practitionersAPI } from '../api/client';
 import { useToast, describeError } from '../contexts/ToastContext';
 import { Reveal } from '../components/ui/motion';
+import { normalizeMediaUrl } from '../utils/images';
 import {
   AlertCircle, BadgeCheck, Camera, CheckCircle, Loader2, Lock, MapPin, Save, User,
 } from 'lucide-react';
@@ -134,7 +135,7 @@ export default function ProfilePage() {
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState('');
-  const [avatarPreview, setAvatarPreview] = useState(user?.avatar || '');
+  const [avatarFailed, setAvatarFailed] = useState(false);
 
   const handleUpdate = async (e) => {
     e.preventDefault();
@@ -156,7 +157,7 @@ export default function ProfilePage() {
   const handleAvatar = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!file.type.startsWith('image/') || file.size > 5 * 1024 * 1024) {
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024) {
       setErr('Choose an image smaller than 5 MB.');
       toast.error('Image too large', 'Choose a JPEG, PNG or WebP image under 5 MB.');
       return;
@@ -165,9 +166,8 @@ export default function ProfilePage() {
     payload.append('avatar', file);
     setBusy('avatar');
     try {
-      const updated = await authAPI.updateProfile(payload);
-      updateProfile(updated.data);
-      setAvatarPreview(URL.createObjectURL(file));
+      await updateProfile(payload);
+      setAvatarFailed(false);
       setMsg('Profile image updated.');
       setErr('');
       toast.success('Profile photo updated', 'Your new avatar is live.');
@@ -210,8 +210,8 @@ export default function ProfilePage() {
             <h3 className="mb-4 font-semibold text-stone-800">Profile Information</h3>
             <div className="mb-5 flex items-center gap-4">
               <div className="h-16 w-16 overflow-hidden rounded-full bg-emerald-100 ring-2 ring-emerald-200/60 transition hover:ring-emerald-300">
-                {avatarPreview ? (
-                  <img src={avatarPreview.replace(/^https?:\/\/[^/]+/, '')} alt="Profile" className="h-full w-full object-cover" />
+                {user?.avatar && !avatarFailed ? (
+                  <img src={normalizeMediaUrl(user.avatar)} alt="Profile" className="h-full w-full object-cover" onError={() => setAvatarFailed(true)} />
                 ) : (
                   <User className="m-5 h-6 w-6 text-emerald-700" />
                 )}

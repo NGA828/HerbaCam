@@ -6,6 +6,7 @@ import { useToast } from '../contexts/ToastContext';
 import { useConfirm } from '../components/ui/ConfirmDialog';
 import { Reveal } from '../components/ui/motion';
 import DosageInfo from '../components/DosageInfo';
+import { normalizeMediaUrl } from '../utils/images';
 import {
   Camera, Upload, X, AlertCircle, Leaf, AlertTriangle, ArrowRight, Image, Info,
   Brain, Flag, Loader2, CheckCircle2, Sparkles, ScanEye
@@ -26,6 +27,10 @@ export default function IdentifyPage() {
   const [isDragging, setIsDragging] = useState(false);
   const resultsRef = useRef(null);
 
+  useEffect(() => () => {
+    if (preview?.startsWith('blob:')) URL.revokeObjectURL(preview);
+  }, [preview]);
+
   // Visiting /user/identify/<id> reopens a previous identification.
   useEffect(() => {
     if (!id) return;
@@ -33,6 +38,8 @@ export default function IdentifyPage() {
     identificationAPI.detail(id)
       .then((res) => {
         setResult(res.data);
+        setFile(null);
+        setPreview(normalizeMediaUrl(res.data.image));
         toast.info(`Identification #${id} loaded`, 'This is a previous result from your history.');
       })
       .catch(() => {

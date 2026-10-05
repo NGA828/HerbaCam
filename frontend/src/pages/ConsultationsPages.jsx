@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
-  CalendarClock, CalendarPlus, Camera, CheckCircle2, Clock3, Gauge, LogOut, MapPin,
+  CalendarClock, CalendarPlus, Camera, CheckCircle2, Clock3, Gauge, Loader2, LogOut, MapPin,
   MessageSquare, Mic, MicOff, RefreshCw, Send, ShieldAlert, Trash2, Users,
   Video, VideoOff, XCircle,
 } from 'lucide-react';
@@ -24,6 +24,7 @@ import {
   Skeleton, TableCard, Td, Th, btnDanger, btnGhost, btnPrimary, btnSecondary,
   extractRows, formatDateTime, inputCls, selectCls,
 } from '../components/admin/ui';
+import { normalizeMediaUrl } from '../utils/images';
 
 const STATUS_TONE = {
   PENDING: 'amber',
@@ -917,6 +918,52 @@ export function ConsultantDeskPage() {
 
 const POLL_MS = 1500;
 
+async function acquireCallMedia(includeVideo) {
+  if (!includeVideo) {
+    return {
+      stream: await navigator.mediaDevices.getUserMedia({ video: false, audio: true }),
+      warning: '',
+    };
+  }
+
+  try {
+    return {
+      stream: await navigator.mediaDevices.getUserMedia({ video: true, audio: true }),
+      warning: '',
+    };
+  } catch (combinedError) {
+    const tracks = [];
+    const failures = [];
+    for (const constraints of [{ video: true, audio: false }, { video: false, audio: true }]) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        tracks.push(...stream.getTracks());
+      } catch (error) {
+        failures.push(error);
+      }
+    }
+
+    if (tracks.length) {
+      const hasVideo = tracks.some((track) => track.kind === 'video');
+      const hasAudio = tracks.some((track) => track.kind === 'audio');
+      const unavailable = [
+        !hasVideo && 'Camera is unavailable',
+        !hasAudio && 'Microphone is unavailable',
+      ].filter(Boolean).join(' and ');
+      return {
+        stream: new MediaStream(tracks),
+        warning: unavailable
+          ? `${unavailable}. Another tab or app may be using it; the call is continuing with the available media.`
+          : '',
+      };
+    }
+
+    throw failures.find((error) => error?.name === 'NotAllowedError')
+      || failures.find((error) => error?.name === 'NotFoundError')
+      || combinedError;
+  }
+}
+
 export function ConsultationRoomPage({ basePath = '/user' }) {
   const { id } = useParams();
   const { user } = useAuth();
@@ -929,13 +976,24 @@ export function ConsultationRoomPage({ basePath = '/user' }) {
   const [draft, setDraft] = useState('');
   const [tab, setTab] = useState('video');
   const [mediaError, setMediaError] = useState('');
+  const [mediaWarning, setMediaWarning] = useState('');
   const [callState, setCallState] = useState('idle');
   const [muted, setMuted] = useState(false);
+  const [joining, setJoining] = useState(false);
+  const [callMode, setCallMode] = useState('video');
+  const [localHasVideo, setLocalHasVideo] = useState(false);
+  const [remoteHasVideo, setRemoteHasVideo] = useState(false);
+  const [videoPlaybackBlocked, setVideoPlaybackBlocked] = useState(false);
+  const [audioBlocked, setAudioBlocked] = useState(false);
 
   const localVideo = useRef(null);
   const remoteVideo = useRef(null);
+  const remoteAudio = useRef(null);
+  const remoteStreamRef = useRef(null);
   const peerRef = useRef(null);
   const localStreamRef = useRef(null);
+  const joiningRef = useRef(false);
+  const callModeRef = useRef('video');
   const lastSignalRef = useRef(0);
   const lastChatRef = useRef(0);
   const pendingIceRef = useRef([]);
@@ -943,14 +1001,61 @@ export function ConsultationRoomPage({ basePath = '/user' }) {
   const pollingRef = useRef(false);
   const joinedAtRef = useRef(null);
   const isPatient = user?.id === appointment?.patient?.id;
+  const setLocalVideoElement = useCallback((element) => {
+    localVideo.current = element;
+    if (element && localStreamRef.current) {
+      element.srcObject = localStreamRef.current;
+      element.play().catch((error) => console.warn('Could not play local camera preview', error));
+    }
+  }, []);
+  const setRemoteVideoElement = useCallback((element) => {
+    remoteVideo.current = element;
+    if (element && remoteStreamRef.current) {
+      element.srcObject = remoteStreamRef.current;
+      element.muted = true;
+      element.play().then(
+        () => setVideoPlaybackBlocked(false),
+        (error) => {
+          if (error?.name === 'AbortError') return;
+          console.warn('Browser blocked remote video playback', error);
+          setVideoPlaybackBlocked(true);
+          setRemoteHasVideo(false);
+        },
+      );
+    }
+  }, []);
+  const setRemoteAudioElement = useCallback((element) => {
+    remoteAudio.current = element;
+    if (element && remoteStreamRef.current) {
+      element.srcObject = remoteStreamRef.current;
+      element.muted = false;
+      element.play().then(
+        () => setAudioBlocked(false),
+        (error) => {
+          console.warn('Browser blocked remote audio playback', error);
+          setAudioBlocked(true);
+        },
+      );
+    }
+  }, []);
 
   const teardown = useCallback(() => {
     if (peerRef.current) { try { peerRef.current.close(); } catch { /* already closed */ } }
     peerRef.current = null;
     localStreamRef.current?.getTracks().forEach((t) => t.stop());
     localStreamRef.current = null;
+    remoteStreamRef.current = null;
     pendingIceRef.current = [];
+    if (remoteVideo.current) remoteVideo.current.srcObject = null;
+    if (remoteAudio.current) remoteAudio.current.srcObject = null;
+    setLocalHasVideo(false);
+    setRemoteHasVideo(false);
+    setVideoPlaybackBlocked(false);
+    setAudioBlocked(false);
     setMediaError('');
+    setMediaWarning('');
+    setCallMode('video');
+    callModeRef.current = 'video';
     setCallState('idle');
   }, []);
 
@@ -1038,7 +1143,14 @@ export function ConsultationRoomPage({ basePath = '/user' }) {
         peerRef.current = null;
         localStreamRef.current?.getTracks().forEach((t) => t.stop());
         localStreamRef.current = null;
+        remoteStreamRef.current = null;
         pendingIceRef.current = [];
+        if (remoteVideo.current) remoteVideo.current.srcObject = null;
+        if (remoteAudio.current) remoteAudio.current.srcObject = null;
+        setLocalHasVideo(false);
+        setRemoteHasVideo(false);
+        setVideoPlaybackBlocked(false);
+        setAudioBlocked(false);
         setCallState('ended');
         setMediaError('Your counterpart left the room.');
         return;
@@ -1048,6 +1160,16 @@ export function ConsultationRoomPage({ basePath = '/user' }) {
       try {
         if (signal.kind === 'OFFER') {
           await peer.setRemoteDescription(data);
+          const hasVideo = /^m=video\s+[1-9]\d*/m.test(data.sdp || '');
+          const mode = hasVideo ? 'video' : 'voice';
+          callModeRef.current = mode;
+          setCallMode(mode);
+          const { stream, warning } = await acquireCallMedia(hasVideo);
+          localStreamRef.current = stream;
+          setLocalHasVideo(stream.getVideoTracks().length > 0);
+          if (localVideo.current) localVideo.current.srcObject = stream;
+          stream.getTracks().forEach((track) => peer.addTrack(track, stream));
+          setMediaWarning(warning);
           await flushPendingIce(peer);
           const answer = await peer.createAnswer();
           await peer.setLocalDescription(answer);
@@ -1065,8 +1187,24 @@ export function ConsultationRoomPage({ basePath = '/user' }) {
           if (peer.remoteDescription) await peer.addIceCandidate(data);
           else pendingIceRef.current.push(data);
         }
-      } catch {
-        setMediaError('The video link could not be negotiated. Chat still works.');
+      } catch (error) {
+        console.error(`WebRTC ${signal.kind.toLowerCase()} negotiation failed`, error);
+        setMediaError(
+          `The ${signal.kind.toLowerCase()} could not be negotiated: ${
+            error?.message || 'an unexpected browser error occurred'
+          }. Chat still works.`,
+        );
+        try { peer.close(); } catch { /* already closed */ }
+        peerRef.current = null;
+        localStreamRef.current?.getTracks().forEach((track) => track.stop());
+        localStreamRef.current = null;
+        remoteStreamRef.current = null;
+        setLocalHasVideo(false);
+        setRemoteHasVideo(false);
+        setVideoPlaybackBlocked(false);
+        setAudioBlocked(false);
+        setCallState('ended');
+        consultationsAPI.sendSignal(conversationId, { kind: 'LEAVE', payload: '' }).catch(() => {});
       }
     }
 
@@ -1075,14 +1213,21 @@ export function ConsultationRoomPage({ basePath = '/user' }) {
     return () => { cancelled = true; window.clearInterval(timer); };
   }, [conversationId]);
 
-  async function join() {
+  async function join(mode = callMode) {
+    if (joiningRef.current || peerRef.current) return;
+    joiningRef.current = true;
+    setJoining(true);
     setTab('video');
+    callModeRef.current = mode;
+    setCallMode(mode);
     // Declared outside the try: the offer is built a few steps later, and a
     // const inside the block would be gone by then.
     let iceServers;
     let joinedConversationId;
+    let localStream;
     joinedAtRef.current = Date.now();
     setMediaError('');
+    setMediaWarning('');
     try {
       const res = await consultationsAPI.startConsultation(id);
       joinedConversationId = res.data.conversation_id;
@@ -1092,20 +1237,36 @@ export function ConsultationRoomPage({ basePath = '/user' }) {
         : [{ urls: 'stun:stun.l.google.com:19302' }];
     } catch (err) {
       toast.error('Could not join', describeError(err));
+      joiningRef.current = false;
+      setJoining(false);
       return;
     }
     if (!navigator.mediaDevices?.getUserMedia || typeof RTCPeerConnection === 'undefined') {
       setMediaError('This browser cannot capture camera and microphone here (a secure https context is required). You can still chat.');
+      joiningRef.current = false;
+      setJoining(false);
       return;
     }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-      localStreamRef.current = stream;
-      if (localVideo.current) localVideo.current.srcObject = stream;
+      if (isPatient) {
+        const { stream, warning } = await acquireCallMedia(mode === 'video');
+        const negotiatedMode = mode === 'video' && !stream.getVideoTracks().length
+          ? 'voice'
+          : mode;
+        callModeRef.current = negotiatedMode;
+        setCallMode(negotiatedMode);
+        localStream = stream;
+        setLocalHasVideo(stream.getVideoTracks().length > 0);
+        setMediaWarning(warning);
+        localStreamRef.current = stream;
+        if (localVideo.current) localVideo.current.srcObject = stream;
+      }
 
       const peer = new RTCPeerConnection({ iceServers });
       peerRef.current = peer;
-      stream.getTracks().forEach((track) => peer.addTrack(track, stream));
+      localStream?.getTracks().forEach((track) => peer.addTrack(track, localStream));
+      setCallState('connecting');
+      setMuted(false);
       peer.onicecandidate = (event) => {
         if (event.candidate) {
           consultationsAPI.sendSignal(joinedConversationId, {
@@ -1114,7 +1275,35 @@ export function ConsultationRoomPage({ basePath = '/user' }) {
         }
       };
       peer.ontrack = (event) => {
-        if (remoteVideo.current) remoteVideo.current.srcObject = event.streams[0];
+        const stream = event.streams[0] || remoteStreamRef.current || new MediaStream();
+        if (!stream.getTracks().includes(event.track)) stream.addTrack(event.track);
+        remoteStreamRef.current = stream;
+        const hasVideo = stream.getVideoTracks().length > 0;
+        setRemoteHasVideo(hasVideo);
+        if (remoteVideo.current) {
+          remoteVideo.current.srcObject = stream;
+          remoteVideo.current.muted = true;
+          remoteVideo.current.play().then(
+            () => setVideoPlaybackBlocked(false),
+            (error) => {
+              if (error?.name === 'AbortError') return;
+              console.warn('Browser blocked remote video playback', error);
+              setVideoPlaybackBlocked(true);
+              setRemoteHasVideo(false);
+            },
+          );
+        }
+        if (remoteAudio.current) {
+          remoteAudio.current.srcObject = stream;
+          remoteAudio.current.muted = false;
+          remoteAudio.current.play().then(
+            () => setAudioBlocked(false),
+            (error) => {
+              console.warn('Browser blocked remote audio playback', error);
+              setAudioBlocked(true);
+            },
+          );
+        }
         setCallState('connected');
         setMediaError('');
       };
@@ -1132,7 +1321,6 @@ export function ConsultationRoomPage({ basePath = '/user' }) {
         const offer = await peer.createOffer();
         await peer.setLocalDescription(offer);
         await consultationsAPI.sendSignal(joinedConversationId, { kind: 'OFFER', payload: JSON.stringify(offer) });
-        setCallState('connecting');
       }
     } catch (err) {
       const message = err?.name === 'NotAllowedError' || err?.name === 'SecurityError'
@@ -1143,6 +1331,17 @@ export function ConsultationRoomPage({ basePath = '/user' }) {
             ? 'The camera or microphone is already in use by another application.'
             : 'Camera and microphone are unavailable. Check browser permissions and try again.';
       setMediaError(`${message} The consultation can continue as chat.`);
+      if (peerRef.current) {
+        try { peerRef.current.close(); } catch { /* already closed */ }
+        peerRef.current = null;
+      }
+      localStreamRef.current?.getTracks().forEach((track) => track.stop());
+      localStreamRef.current = null;
+      setCallState('ended');
+      consultationsAPI.sendSignal(joinedConversationId, { kind: 'LEAVE', payload: '' }).catch(() => {});
+    } finally {
+      joiningRef.current = false;
+      setJoining(false);
     }
   }
 
@@ -1184,6 +1383,29 @@ export function ConsultationRoomPage({ basePath = '/user' }) {
     setMuted(!track.enabled);
   }
 
+  async function enableRemoteAudio() {
+    try {
+      await remoteAudio.current?.play();
+      setAudioBlocked(false);
+      setMediaError('');
+    } catch (error) {
+      console.error('Could not start remote audio playback', error);
+      setMediaError(`Audio playback could not start: ${error?.message || 'check browser sound permissions.'}`);
+    }
+  }
+
+  async function enableRemoteVideo() {
+    try {
+      await remoteVideo.current?.play();
+      setVideoPlaybackBlocked(false);
+      setRemoteHasVideo(true);
+      setMediaError('');
+    } catch (error) {
+      console.error('Could not start remote video playback', error);
+      setMediaError(`Video playback could not start: ${error?.message || 'check browser permissions.'}`);
+    }
+  }
+
   useEffect(() => () => teardown(), [teardown]);
 
   if (!appointment) {
@@ -1195,6 +1417,27 @@ export function ConsultationRoomPage({ basePath = '/user' }) {
   }
 
   const other = isPatient ? appointment.expert : appointment.patient;
+  const otherAvatar = normalizeMediaUrl(other?.avatar);
+  const otherName = other?.full_name || other?.username || 'Participant';
+  const otherVideoPlaceholder = (
+    <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 overflow-hidden text-white">
+      {otherAvatar && (
+        <img
+          src={otherAvatar}
+          alt=""
+          className="absolute inset-0 h-full w-full scale-110 object-cover opacity-35 blur-2xl"
+        />
+      )}
+      <div className="absolute inset-0 bg-stone-950/70" />
+      <Avatar name={otherName} src={other?.avatar} size="h-24 w-24 text-3xl" />
+      <p className="relative font-semibold">
+        {videoPlaybackBlocked
+          ? 'Video playback blocked'
+          : callState === 'connected' ? 'Camera unavailable' : 'Waiting for video'}
+      </p>
+      <p className="relative text-sm text-stone-300">{otherName}</p>
+    </div>
+  );
 
   return (
     <PageTransition>
@@ -1216,6 +1459,7 @@ export function ConsultationRoomPage({ basePath = '/user' }) {
           call: {callState}
         </Badge>
         {mediaError && <Badge tone="amber">{mediaError}</Badge>}
+        {mediaWarning && <Badge tone="amber">{mediaWarning}</Badge>}
       </div>
 
       <div className="mt-4 flex gap-2">
@@ -1244,12 +1488,34 @@ export function ConsultationRoomPage({ basePath = '/user' }) {
               <p className="mx-auto mt-1 max-w-md text-sm text-stone-500">
                 {callState === 'ended'
                   ? 'Start again after both participants are ready.'
-                  : `Joining opens your camera and microphone and connects you directly to ${other?.full_name}. Video travels peer-to-peer between the two of you; the server only relays the handshake.`}
+                  : `Choose a voice-only or video call with ${other?.full_name}. Audio and video travel peer-to-peer; the server only relays the handshake. For same-computer testing, use separate browser profiles for each account and headphones to avoid audio feedback.`}
               </p>
               {appointment.can_join ? (
-                <button onClick={join} className={`${btnPrimary} mt-4`}>
-                  <Video className="h-4 w-4" /> {callState === 'ended' ? 'Rejoin the room' : 'Join the room'}
-                </button>
+                isPatient ? (
+                  <div className="mt-4 flex flex-wrap justify-center gap-2">
+                    <button
+                      onClick={() => join('video')}
+                      disabled={joining}
+                      className={btnPrimary}
+                    >
+                      {joining ? <Loader2 className="h-4 w-4 animate-spin" /> : <Video className="h-4 w-4" />}
+                      {joining ? 'Joining…' : `${callState === 'ended' ? 'Rejoin with' : 'Start'} video`}
+                    </button>
+                    <button
+                      onClick={() => join('voice')}
+                      disabled={joining}
+                      className={btnSecondary}
+                    >
+                      {joining ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mic className="h-4 w-4" />}
+                      {joining ? 'Joining…' : `${callState === 'ended' ? 'Rejoin with' : 'Start'} voice`}
+                    </button>
+                  </div>
+                ) : (
+                  <button onClick={() => join()} disabled={joining} className={`${btnPrimary} mt-4`}>
+                    {joining ? <Loader2 className="h-4 w-4 animate-spin" /> : <Video className="h-4 w-4" />}
+                    {joining ? 'Waiting for patient…' : 'Join the room'}
+                  </button>
+                )
               ) : (
                 <p className="mt-4 inline-flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
                   <ShieldAlert className="h-4 w-4" /> Waiting for the specialist to confirm this appointment.
@@ -1259,18 +1525,70 @@ export function ConsultationRoomPage({ basePath = '/user' }) {
           ) : (
             <>
               <div className="relative aspect-video bg-stone-900">
-                <video ref={remoteVideo} autoPlay playsInline className="h-full w-full object-contain" />
+                <div className="absolute left-4 top-4 z-10 rounded-full bg-black/50 px-3 py-1 text-xs font-semibold capitalize text-white">
+                  {callMode} call
+                </div>
                 <video
-                  ref={localVideo} autoPlay playsInline muted
-                  className="absolute bottom-4 right-4 h-28 w-40 rounded-lg border-2 border-white/20 bg-stone-800 object-cover shadow-lg"
+                  ref={setRemoteVideoElement}
+                  autoPlay
+                  playsInline
+                  className={`h-full w-full object-contain ${callMode === 'voice' ? 'hidden' : ''}`}
                 />
+                <audio ref={setRemoteAudioElement} autoPlay className="sr-only" />
+                {callMode === 'voice' ? (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 overflow-hidden text-white">
+                    {otherAvatar && (
+                      <img
+                        src={otherAvatar}
+                        alt=""
+                        className="absolute inset-0 h-full w-full scale-110 object-cover opacity-35 blur-2xl"
+                      />
+                    )}
+                    <div className="absolute inset-0 bg-stone-950/70" />
+                    <Avatar name={otherName} src={other?.avatar} size="h-24 w-24 text-3xl" />
+                    <p className="relative font-semibold">Voice call</p>
+                    <p className="relative text-sm text-stone-300">{otherName}</p>
+                  </div>
+                ) : (
+                  <>
+                    {!remoteHasVideo && otherVideoPlaceholder}
+                    {localHasVideo ? (
+                      <video
+                        ref={setLocalVideoElement}
+                        autoPlay
+                        playsInline
+                        muted
+                        className="absolute bottom-4 right-4 h-28 w-40 rounded-lg border-2 border-white/20 bg-stone-800 object-cover shadow-lg"
+                      />
+                    ) : (
+                      <div className="absolute bottom-4 right-4 flex h-28 w-40 flex-col items-center justify-center gap-2 rounded-lg border-2 border-white/20 bg-stone-800/90 text-xs text-white shadow-lg">
+                        <Avatar
+                          name={`${user?.first_name || ''} ${user?.last_name || user?.username || ''}`.trim()}
+                          src={user?.avatar}
+                          size="h-12 w-12 text-base"
+                        />
+                        Camera unavailable
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
               <div className="flex items-center justify-center gap-2 border-t border-stone-100 p-4">
                 <button onClick={toggleMute} className={btnSecondary}>
                   {muted ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
                   {muted ? 'Unmute' : 'Mute'}
                 </button>
-                <button onClick={teardown} className={btnSecondary}><VideoOff className="h-4 w-4" /> Stop video</button>
+                {audioBlocked && (
+                  <button onClick={enableRemoteAudio} className={btnSecondary}>
+                    Enable sound
+                  </button>
+                )}
+                {videoPlaybackBlocked && (
+                  <button onClick={enableRemoteVideo} className={btnSecondary}>
+                    Enable video
+                  </button>
+                )}
+                <button onClick={teardown} className={btnSecondary}><VideoOff className="h-4 w-4" /> Stop call</button>
                 <button onClick={leave} className={btnDanger}><LogOut className="h-4 w-4" /> Leave</button>
               </div>
             </>

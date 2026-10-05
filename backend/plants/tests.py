@@ -4,6 +4,12 @@ The ANCESTOR use-case diagram hands ``manage plant information`` to the
 specialized expert, so these assert what a curator may and may not do to the
 species database, and that widening the write path did not widen the read path.
 """
+from io import BytesIO
+from tempfile import TemporaryDirectory
+
+from PIL import Image
+from django.test import override_settings
+from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -28,6 +34,12 @@ def plant_payload(scientific_name='Zingiber officinale'):
         'family': 'Zingiberaceae',
         'is_published': True,
     }
+
+
+def tiny_png():
+    image = BytesIO()
+    Image.new('RGB', (1, 1), color='green').save(image, format='PNG')
+    return SimpleUploadedFile('leaf.png', image.getvalue(), content_type='image/png')
 
 
 class PlantCurationPermissionTests(APITestCase):
@@ -57,6 +69,36 @@ class PlantCurationPermissionTests(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.hidden.refresh_from_db()
         self.assertEqual(self.hidden.description, 'Bark harvested under permit.')
+
+    def test_expert_can_upload_a_plant_photo_and_edit_without_replacing_it(self):
+        self.client.force_authenticate(user=self.expert)
+        with TemporaryDirectory() as media_root, override_settings(MEDIA_ROOT=media_root):
+            created = self.client.post(
+                ENDPOINT,
+                {**plant_payload('Aloe vera'), 'image': tiny_png()},
+                format='multipart',
+            )
+            self.assertEqual(created.status_code, status.HTTP_201_CREATED, created.data)
+            plant = Plant.objects.get(scientific_name='Aloe vera')
+            image_name = plant.image.name
+            self.assertTrue(image_name.startswith('plants/'))
+
+            updated = self.client.patch(
+                f'{ENDPOINT}{plant.pk}/',
+                {'description': 'A succulent plant.'},
+            )
+            self.assertEqual(updated.status_code, status.HTTP_200_OK, updated.data)
+            plant.refresh_from_db()
+            self.assertEqual(plant.image.name, image_name)
+
+            cleared = self.client.patch(
+                f'{ENDPOINT}{plant.pk}/',
+                {'image': ''},
+                format='multipart',
+            )
+            self.assertEqual(cleared.status_code, status.HTTP_200_OK, cleared.data)
+            plant.refresh_from_db()
+            self.assertFalse(plant.image)
 
     def test_expert_can_publish_a_plant(self):
         self.client.force_authenticate(user=self.expert)

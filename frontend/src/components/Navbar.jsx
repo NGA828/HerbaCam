@@ -2,12 +2,15 @@ import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
+import { useConfirm } from './ui/ConfirmDialog';
+import { Avatar } from './admin/ui';
 import { Menu, X, LayoutDashboard, LogOut } from 'lucide-react';
 import { LogoMark } from './Logo';
 
 export default function Navbar() {
   const { user, logout } = useAuth();
   const { toast } = useToast();
+  const confirm = useConfirm();
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
@@ -19,6 +22,19 @@ export default function Navbar() {
   }, []);
 
   useEffect(() => { setMobileOpen(false); }, [location]);
+
+  const handleLogout = async () => {
+    const confirmed = await confirm({
+      title: 'Log out of Ancestor?',
+      message: 'You will need to sign in again to access your account.',
+      confirmLabel: 'Log out',
+      tone: 'danger',
+    });
+    if (!confirmed) return;
+    logout();
+    setMobileOpen(false);
+    toast.success('Signed out', 'You have been logged out of Ancestor.');
+  };
 
   const links = [
     { path: '/plants', label: 'Plants' },
@@ -65,13 +81,13 @@ export default function Navbar() {
                   to={user.role === 'ADMIN' ? '/admin/dashboard' : user.role === 'EXPERT' ? '/expert/dashboard' : user.role === 'PRACTITIONER' ? '/practitioner/dashboard' : '/dashboard'}
                   className="flex items-center gap-2 rounded-lg bg-green-700 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-green-800 active:scale-[0.98]"
                 >
+                  <Avatar name={user.first_name || user.username} src={user.avatar} size="h-6 w-6 text-[9px]" />
                   <LayoutDashboard className="w-4 h-4" /> Dashboard
                 </Link>
                 <button
-                  onClick={() => {
-                    logout();
-                    toast.success('Signed out', 'You have been logged out of Ancestor.');
-                  }}
+                  onClick={handleLogout}
+                  aria-label="Log out"
+                  title="Log out"
                   className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-stone-500 transition hover:bg-stone-100 hover:text-stone-800 active:scale-95"
                 >
                   <LogOut className="w-4 h-4" />
@@ -113,12 +129,13 @@ export default function Navbar() {
             <>
               <Link
                 to={user.role === 'ADMIN' ? '/admin/dashboard' : user.role === 'EXPERT' ? '/expert/dashboard' : user.role === 'PRACTITIONER' ? '/practitioner/dashboard' : '/dashboard'}
-                className="block rounded-lg bg-green-50 px-4 py-2.5 text-sm font-medium text-green-700"
+                className="flex items-center gap-2 rounded-lg bg-green-50 px-4 py-2.5 text-sm font-medium text-green-700"
               >
+                <Avatar name={user.first_name || user.username} src={user.avatar} size="h-7 w-7 text-[10px]" />
                 Dashboard
               </Link>
               <button
-                onClick={() => { logout(); toast.success('Signed out', 'You have been logged out of Ancestor.'); }}
+                onClick={handleLogout}
                 className="block w-full rounded-lg px-4 py-2.5 text-left text-sm font-medium text-stone-600 transition hover:bg-stone-100"
               >
                 Log out
