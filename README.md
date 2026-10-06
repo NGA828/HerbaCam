@@ -2,6 +2,10 @@
 
 **AI-Powered Web Application for the Identification, Recommendation, and Preservation of Cameroonian Traditional Medicinal Plant Knowledge**
 
+## User guide
+
+The complete setup and application walkthrough is available as a [PDF user guide](docs/USER_GUIDE.pdf), with an editable [Markdown source](docs/USER_GUIDE.md). To regenerate the PDF after editing the source, install ReportLab with `python -m pip install reportlab` and run `python scripts/build_user_guide_pdf.py`.
+
 ## Architecture
 
 ```
@@ -17,9 +21,8 @@ Django REST API (DRF, JWT Auth)
       ├────────────┐
       │            │
       ▼            ▼
-    SQLite     OpenRouter
-   (MySQL      (Vision AI)
-    ready)
+  MySQL/MariaDB   OpenRouter
+  (SQLite fallback) (Vision AI)
 ```
 
 Django is the central controller. The AI never directly accesses the database. The frontend never directly accesses OpenRouter.
@@ -34,42 +37,53 @@ Django is the central controller. The AI never directly accesses the database. T
 
 ## Quick Start
 
-### Backend
+### Backend (MySQL/MariaDB)
 
-1. Copy `.env.example` to `.env` and fill in your MySQL credentials:
+Start your MySQL/MariaDB service first. The project targets MySQL 5.7+ or MariaDB 10.4+. Create the `herbacam` database if it does not already exist (or use your existing schema name in `DB_NAME`):
+
+```sql
+CREATE DATABASE IF NOT EXISTS herbacam CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+```
+
+From the repository root, configure the backend environment file:
+
 ```bash
+cd backend
 cp .env.example .env
 ```
 
-2. Install dependencies and run the database:
+On Windows PowerShell use `Copy-Item .env.example .env`. Edit `backend/.env` with the actual `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_HOST`, and `DB_PORT` values. Keep the private file out of Git.
+
+Create and activate a virtual environment (`.venv\Scripts\Activate.ps1` on Windows PowerShell, or `source .venv/bin/activate` on macOS/Linux), install dependencies, then run migrations:
+
 ```bash
-cd backend
-python -m venv venv
-venv\Scripts\activate.bat
-pip install -r requirements.txt
+python -m venv .venv
+python -m pip install -r requirements.txt
+python manage.py check
 python manage.py migrate
-python manage.py seed_data --clear   # Load demo data + copy plant images into backend/media/
-python manage.py check_identification   # optional: what the AI image path will actually do
+```
+
+If you need demo content, run `python manage.py seed_data --clear` **only on an empty, disposable development database**. It deletes existing application records—including accounts—before it seeds demo users, plants, and images. Skip it if this MySQL database contains anything you want to keep.
+
+Start Django:
+
+```bash
 python manage.py runserver 0.0.0.0:8000
 ```
 
-`backend/media/` is not tracked by git. `seed_data` populates it from the demo images in
-`frontend/src/assets/plants/`, so run it after cloning or plant images will 404.
-
-> Note: `mysqlclient` is the recommended production driver, but the included `PyMySQL` fallback
-> lets the backend connect to MySQL on Windows/common dev machines without build tools.
-
-> Note: the project targets Django 4.2 LTS so it runs against MariaDB 10.4 (as shipped with
-> XAMPP/WAMP). Django 5 requires MariaDB 10.11+ or MySQL 8.0.11+.
+For the optional SQLite fallback, OpenRouter setup, and full application walkthrough, see the [PDF user guide](docs/USER_GUIDE.pdf). `backend/media/` is not tracked by Git; seeding copies demo plant images there.
 
 ### Frontend
+
+Open a second terminal from the repository root while the backend is running:
+
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
 
-Visit http://localhost:5173
+Visit http://localhost:5173. Vite proxies `/api` and `/media` to the backend at `http://localhost:8000`.
 
 ### Running it behind a proxy
 
@@ -124,8 +138,11 @@ accounts so notifications, reviews and audit history have realistic actors.
 | Regions / divisions / communities | 10 / 40 / 120 | The real Cameroonian administrative tree |
 | Articles | 14 | Published and draft, across 6 categories |
 
-Always pass `--clear`: the seeder is idempotent only when it starts from an
-empty database.
+Use this seeder only with a disposable development database. It expects an empty
+starting database, and `--clear` deletes all existing application data (including
+accounts) before loading the demo records. Never run it against a MySQL database
+whose data must be preserved; use a separate schema such as `herbacam_demo` for
+sample data.
 
 ## Environment Variables
 
